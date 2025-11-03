@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List, Annotated, Optional
 from datetime import timezone
 import traceback
-
+from db import engine
+import models_inventario as models
 # --- Configuración y Otros ---
 from starlette.config import Config
 import httpx # Importante: para llamadas entre servicios
@@ -24,6 +25,12 @@ app = FastAPI(
     description="Servicio dedicado para gestionar planteles, laboratorios, recursos y préstamos.",
     version="1.0.0"
 )
+
+@app.on_event("startup")
+async def startup_event():
+    print("INFO: Creando tablas de Inventario (si no existen)...")
+    models.Base.metadata.create_all(bind=engine)
+    print("INFO: Tablas de Inventario listas.")
 
 # --- Database Dependency ---
 DbSession = Annotated[Session, Depends(get_db)]
@@ -401,4 +408,5 @@ def update_prestamo_estado(prestamo_id: int, nuevo_estado: str, user: AdminUser,
         prestamo.created_at = prestamo.created_at.astimezone(timezone.utc)
         return prestamo
     except Exception as e:
+
         db.rollback(); raise HTTPException(status_code=500, detail=f"Error al actualizar estado: {e}")
