@@ -1,13 +1,12 @@
 # Plano maestro para Render.com
 
-databases: # <-- ¡LA BASE DE DATOS VA AQUÍ ARRIBA!
+databases:
   - name: gest-db
     databaseName: laboratorios
     user: admin
-    plan: free # Usa el plan gratuito para empezar
-    # Render te dará una contraseña segura automáticamente
+    plan: free 
 
-services: # <-- TUS SERVICIOS WEB VAN EN ESTA LISTA SEPARADA
+services:
 
   # 1. Servicio de Usuarios
   - type: web
@@ -18,10 +17,10 @@ services: # <-- TUS SERVICIOS WEB VAN EN ESTA LISTA SEPARADA
     envVars:
       - key: DATABASE_URL
         fromDatabase:
-          name: gest-db # Se conecta a la BD de arriba
+          name: gest-db 
           property: connectionString
       - key: JWT_SECRET_KEY
-        generateValue: true # Render creará una clave segura por ti
+        generateValue: true 
 
   # 2. Servicio de Reservas
   - type: web
@@ -37,9 +36,8 @@ services: # <-- TUS SERVICIOS WEB VAN EN ESTA LISTA SEPARADA
       - key: JWT_SECRET_KEY
         fromService:
           type: web
-          name: servicio-usuarios # Usa la misma clave que servicio-usuarios
+          name: servicio-usuarios
           envVarKey: JWT_SECRET_KEY
-      # --- Conexión interna de servicio a servicio ---
       - key: USER_SERVICE_URL
         value: http://servicio-usuarios:8001
 
@@ -69,6 +67,6 @@ services: # <-- TUS SERVICIOS WEB VAN EN ESTA LISTA SEPARADA
     name: gest-gateway
     plan: free
     runtime: docker
-    dockerfilePath: ./nginx/Dockerfile # Apunta al Dockerfile que creaste
-    port: 8000 # El puerto que Nginx escucha
-    # Render automáticamente publicará este servicio en los puertos 80/443
+    dockerfilePath: ./nginx/Dockerfile
+    # --- ¡LÍNEA "port: 8000" ELIMINADA! ---
+    # Render enviará el tráfico al puerto 80 por defecto.
