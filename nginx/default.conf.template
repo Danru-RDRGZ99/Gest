@@ -1,15 +1,11 @@
-# This is rendered by envsubst into /etc/nginx/conf.d/default.conf at container start
-
 limit_req_zone $binary_remote_addr zone=reserva_limit:10m rate=10r/m;
 
-# Injected by Render Blueprint (host:port each)
 upstream servicio_usuarios    { server ${USUARIOS_HOSTPORT}; }
 upstream servicio_reservas    { server ${RESERVAS_HOSTPORT}; }
 upstream servicio_inventario  { server ${INVENTARIO_HOSTPORT}; }
 
 server {
-    # Render web services must listen on $PORT (Render sets it to 10000)
-    listen 10000;
+    listen 10000;    # Render expone $PORT=10000
     server_name _;
 
     location /ws {
