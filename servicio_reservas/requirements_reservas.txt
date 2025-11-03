@@ -1,0 +1,26 @@
+# --- Framework Principal ---
+fastapi==0.119.1
+uvicorn==0.38.0
+
+# --- Base de Datos ---
+SQLAlchemy==2.0.44
+psycopg2-binary==2.9.11
+
+# --- Modelos de Datos ---
+pydantic==2.12.3
+
+# --- Seguridad y JWT ---
+bcrypt==5.0.0
+python-jose==3.5.0
+passlib==1.7.4
+
+# --- Google Calendar Service ---
+google-api-python-client==2.185.0
+google-auth==2.41.1
+pytz==2025.2
+
+# --- Configuración (.env) ---
+python-dotenv==1.1.1
+
+# --- Comunicación HTTP (Servicio-a-Servicio) ---
+httpx==0.28.1

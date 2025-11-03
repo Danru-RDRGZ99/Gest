@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # 1. El servicio de Base de Datos
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: daruAdmin
+      POSTGRES_DB: Laboratorios
+    ports:
+      - "54320:5432" # Expone el puerto de la BD a tu máquina (opcional)
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Guarda los datos
+
+  # 2. Tu servicio de Usuarios
+  usuarios:
+    build: ./servicio_usuarios # Le dice que construya usando el Dockerfile de esa carpeta
+    ports:
+      - "8001:8001" # Expone el puerto
+    environment:
+      - DATABASE_URL=postgresql://admin:daruAdmin@db:5432/Laboratorios
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY} # Lee la clave desde un .env
+    depends_on:
+      - db # No arranca hasta que la BD esté lista
+
+  # 3. Tu servicio de Reservas
+  reservas:
+    build: ./servicio_reservas
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=postgresql://admin:daruAdmin@db:5432/Laboratorios
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - USER_SERVICE_URL=http://usuarios:8001 # ¡Ve la nota abajo!
+    depends_on:
+      - db
+      - usuarios
+
+  # 4. Tu servicio de Inventario
+  inventario:
+    build: ./servicio_inventario
+    ports:
+      - "8003:8003"
+    environment:
+      - DATABASE_URL=postgresql://admin:daruAdmin@db:5432/Laboratorios
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - USER_SERVICE_URL=http://usuarios:8001
+      - RESERVA_SERVICE_URL=http://reservas:8002
+    depends_on:
+      - db
+      - usuarios
+      - reservas
+
+  # 5. Tu API Gateway (Nginx)
+  nginx:
+    image: nginx:latest
+    ports:
+      - "80:8000" # ¡Público! Expone el puerto 80 (web) y lo redirige al 8000 (de Nginx)
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf # Sobrescribe la config de Nginx con la tuya
+    depends_on:
+      - usuarios
+      - reservas
+      - inventario
+
+volumes:
+  postgres_data: # Define el volumen para persistir la BD
