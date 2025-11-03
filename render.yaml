@@ -1,0 +1,74 @@
+# Plano maestro para Render.com
+services:
+
+  # 1. La Base de Datos
+  - type: psql
+    name: gest-db
+    databaseName: laboratorios
+    user: admin
+    plan: free # Usa el plan gratuito para empezar
+    # Render te dará una contraseña segura automáticamente
+
+  # 2. Servicio de Usuarios
+  - type: web
+    name: servicio-usuarios
+    plan: free
+    runtime: docker
+    dockerfilePath: ./servicio_usuarios/Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gest-db # Se conecta a la BD de arriba
+          property: connectionString
+      - key: JWT_SECRET_KEY
+        generateValue: true # Render creará una clave segura por ti
+
+  # 3. Servicio de Reservas
+  - type: web
+    name: servicio-reservas
+    plan: free
+    runtime: docker
+    dockerfilePath: ./servicio_reservas/Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gest-db
+          property: connectionString
+      - key: JWT_SECRET_KEY
+        fromService:
+          type: web
+          name: servicio-usuarios # Usa la misma clave que servicio-usuarios
+          envVarKey: JWT_SECRET_KEY
+      # --- Conexión interna de servicio a servicio ---
+      - key: USER_SERVICE_URL
+        value: http://servicio-usuarios:8001
+
+  # 4. Servicio de Inventario
+  - type: web
+    name: servicio-inventario
+    plan: free
+    runtime: docker
+    dockerfilePath: ./servicio_inventario/Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gest-db
+          property: connectionString
+      - key: JWT_SECRET_KEY
+        fromService:
+          type: web
+          name: servicio-usuarios
+          envVarKey: JWT_SECRET_KEY
+      - key: USER_SERVICE_URL
+        value: http://servicio-usuarios:8001
+      - key: RESERVA_SERVICE_URL
+        value: http://servicio-reservas:8002
+
+  # 5. El API Gateway (Nginx) - ¡Este es tu servicio público!
+  - type: web
+    name: gest-gateway
+    plan: free
+    runtime: docker
+    dockerfilePath: ./nginx/Dockerfile # Apunta al Dockerfile que creaste
+    port: 8000 # El puerto que Nginx escucha
+    # Render automáticamente publicará este servicio en los puertos 80/443
