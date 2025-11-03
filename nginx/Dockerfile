@@ -1,10 +1,3 @@
-# Archivo: GEST/nginx/Dockerfile
-
-# Usar la imagen oficial de Nginx
 FROM nginx:latest
-
-# Borrar la configuración por defecto
-RUN rm /etc/nginx/conf.d/default.conf
-
-# Copiar nuestra configuración personalizada
-COPY nginx.conf /etc/nginx/nginx.conf
+RUN rm -f /etc/nginx/conf.d/default.conf
+COPY default.conf.template /etc/nginx/templates/default.conf.template
