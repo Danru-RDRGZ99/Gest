@@ -1,15 +1,15 @@
 # Plano maestro para Render.com
-services:
 
-  # 1. La Base de Datos
-  - type: psql
-    name: gest-db
+databases: # <-- ¡LA BASE DE DATOS VA AQUÍ ARRIBA!
+  - name: gest-db
     databaseName: laboratorios
     user: admin
     plan: free # Usa el plan gratuito para empezar
     # Render te dará una contraseña segura automáticamente
 
-  # 2. Servicio de Usuarios
+services: # <-- TUS SERVICIOS WEB VAN EN ESTA LISTA SEPARADA
+
+  # 1. Servicio de Usuarios
   - type: web
     name: servicio-usuarios
     plan: free
@@ -23,7 +23,7 @@ services:
       - key: JWT_SECRET_KEY
         generateValue: true # Render creará una clave segura por ti
 
-  # 3. Servicio de Reservas
+  # 2. Servicio de Reservas
   - type: web
     name: servicio-reservas
     plan: free
@@ -43,7 +43,7 @@ services:
       - key: USER_SERVICE_URL
         value: http://servicio-usuarios:8001
 
-  # 4. Servicio de Inventario
+  # 3. Servicio de Inventario
   - type: web
     name: servicio-inventario
     plan: free
@@ -64,7 +64,7 @@ services:
       - key: RESERVA_SERVICE_URL
         value: http://servicio-reservas:8002
 
-  # 5. El API Gateway (Nginx) - ¡Este es tu servicio público!
+  # 4. El API Gateway (Nginx) - ¡Este es tu servicio público!
   - type: web
     name: gest-gateway
     plan: free
