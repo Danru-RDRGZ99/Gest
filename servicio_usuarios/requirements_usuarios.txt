@@ -1,0 +1,28 @@
+# --- Framework Principal ---
+fastapi==0.119.1
+uvicorn==0.38.0
+
+# --- Base de Datos (SQLAlchemy y driver de PostgreSQL) ---
+SQLAlchemy==2.0.44
+psycopg2-binary==2.9.11
+
+# --- Modelos de Datos ---
+pydantic==2.12.3
+
+# --- Autenticación y Seguridad ---
+bcrypt==5.0.0
+python-jose==3.5.0
+passlib==1.7.4 # Dependencia común para python-jose[cryptography]
+
+# --- CAPTCHA ---
+captcha==0.7.1
+pillow==12.0.0 # 'captcha' depende de 'pillow' para generar imágenes
+
+# --- Login con Google ---
+google-auth==2.41.1
+google-api-python-client==2.185.0
+
+# --- Configuración (.env) ---
+python-dotenv==1.1.1
+itsdangerous
+email-validator
