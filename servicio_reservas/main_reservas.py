@@ -51,6 +51,7 @@ def load_labs_cache():
 
 @app.on_event("startup")
 async def startup_event():
+    models.Base.metadata.create_all(bind=engine)
     load_labs_cache()
 
 # ==============================================================================
@@ -476,4 +477,5 @@ def cancel_reserva(reserva_id: int, user: CurrentUser, db: DbSession):
         db.refresh(reserva.usuario) # Carga los datos del usuario
         return reserva
     except Exception as e:
+
         db.rollback(); raise HTTPException(status_code=500, detail=f"Error al cancelar reserva local: {e}")
