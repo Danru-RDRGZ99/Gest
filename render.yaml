@@ -1,31 +1,70 @@
 services:
+  # ── API Gateway (público) ──────────────────────────────────────────────
   - type: web
     name: gateway-nginx
     runtime: docker
+    rootDir: nginx
     envVars:
       - key: USUARIOS_HOSTPORT
-        fromService: { name: servicio-usuarios, type: web, property: hostport }   # or type: pserv if it's a Private Service
+        fromService: { name: servicio-usuarios, type: pserv, property: hostport }
       - key: RESERVAS_HOSTPORT
-        fromService: { name: servicio-reservas, type: web, property: hostport }
+        fromService: { name: servicio-reservas, type: pserv, property: hostport }
       - key: INVENTARIO_HOSTPORT
-        fromService: { name: servicio-inventario, type: web, property: hostport }
+        fromService: { name: servicio-inventario, type: pserv, property: hostport }
+    healthCheckPath: /        # Nginx responde 200 en /
 
-  # ejemplo de backends (asegúrate de que escuchen en $PORT):
+  # ── Usuarios (privado) ─────────────────────────────────────────────────
   - type: pserv
     name: servicio-usuarios
+    runtime: docker
+    rootDir: servicio_usuarios
     envVars:
       - key: PORT
         value: "10000"
-    # start command: uvicorn main:app --host 0.0.0.0 --port $PORT
+      - key: DATABASE_URL
+        value: "<INTERNAL_DB_URL>"       # pega la URL interna de tu Postgres de Render
+      - key: JWT_SECRET_KEY
+        value: "<TU_SECRETO_JWT>"
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
+    healthCheckPath: /health
 
+  # ── Reservas (privado) ─────────────────────────────────────────────────
   - type: pserv
     name: servicio-reservas
+    runtime: docker
+    rootDir: servicio_reservas
     envVars:
       - key: PORT
         value: "10000"
+      - key: DATABASE_URL
+        value: "<INTERNAL_DB_URL>"
+      - key: JWT_SECRET_KEY
+        value: "<TU_SECRETO_JWT>"
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
+      # URL del servicio de usuarios (para llamadas S2S)
+      - key: USER_SERVICE_URL
+        fromService: { name: servicio-usuarios, type: pserv, property: hostport }
+    healthCheckPath: /health
 
+  # ── Inventario (privado) ───────────────────────────────────────────────
   - type: pserv
     name: servicio-inventario
+    runtime: docker
+    rootDir: servicio_inventario
     envVars:
       - key: PORT
         value: "10000"
+      - key: DATABASE_URL
+        value: "<INTERNAL_DB_URL>"
+      - key: JWT_SECRET_KEY
+        value: "<TU_SECRETO_JWT>"
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
+      # URLs de servicios vecinos
+      - key: USER_SERVICE_URL
+        fromService: { name: servicio-usuarios, type: pserv, property: hostport }
+      - key: RESERVA_SERVICE_URL
+        fromService: { name: servicio-reservas, type: pserv, property: hostport }
+    healthCheckPath: /health
