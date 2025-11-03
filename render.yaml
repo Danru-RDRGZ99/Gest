@@ -1,72 +1,31 @@
-# Plano maestro para Render.com
-
-databases:
-  - name: gest-db
-    databaseName: laboratorios
-    user: admin
-    plan: free 
-
 services:
-
-  # 1. Servicio de Usuarios
   - type: web
+    name: gateway-nginx
+    runtime: docker
+    envVars:
+      - key: USUARIOS_HOSTPORT
+        fromService: { name: servicio-usuarios, type: web, property: hostport }   # or type: pserv if it's a Private Service
+      - key: RESERVAS_HOSTPORT
+        fromService: { name: servicio-reservas, type: web, property: hostport }
+      - key: INVENTARIO_HOSTPORT
+        fromService: { name: servicio-inventario, type: web, property: hostport }
+
+  # ejemplo de backends (asegúrate de que escuchen en $PORT):
+  - type: pserv
     name: servicio-usuarios
-    plan: free
-    runtime: docker
-    dockerfilePath: ./servicio_usuarios/Dockerfile
     envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: gest-db 
-          property: connectionString
-      - key: JWT_SECRET_KEY
-        generateValue: true 
+      - key: PORT
+        value: "10000"
+    # start command: uvicorn main:app --host 0.0.0.0 --port $PORT
 
-  # 2. Servicio de Reservas
-  - type: web
+  - type: pserv
     name: servicio-reservas
-    plan: free
-    runtime: docker
-    dockerfilePath: ./servicio_reservas/Dockerfile
     envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: gest-db
-          property: connectionString
-      - key: JWT_SECRET_KEY
-        fromService:
-          type: web
-          name: servicio-usuarios
-          envVarKey: JWT_SECRET_KEY
-      - key: USER_SERVICE_URL
-        value: http://servicio-usuarios:8001
+      - key: PORT
+        value: "10000"
 
-  # 3. Servicio de Inventario
-  - type: web
+  - type: pserv
     name: servicio-inventario
-    plan: free
-    runtime: docker
-    dockerfilePath: ./servicio_inventario/Dockerfile
     envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: gest-db
-          property: connectionString
-      - key: JWT_SECRET_KEY
-        fromService:
-          type: web
-          name: servicio-usuarios
-          envVarKey: JWT_SECRET_KEY
-      - key: USER_SERVICE_URL
-        value: http://servicio-usuarios:8001
-      - key: RESERVA_SERVICE_URL
-        value: http://servicio-reservas:8002
-
-  # 4. El API Gateway (Nginx) - ¡Este es tu servicio público!
-  - type: web
-    name: gest-gateway
-    plan: free
-    runtime: docker
-    dockerfilePath: ./nginx/Dockerfile
-    # --- ¡LÍNEA "port: 8000" ELIMINADA! ---
-    # Render enviará el tráfico al puerto 80 por defecto.
+      - key: PORT
+        value: "10000"
