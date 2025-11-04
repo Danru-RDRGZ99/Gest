@@ -1,6 +1,6 @@
 services:
   - type: pserv
-    name: servicio-usuarios
+    name: servicio-usuarios        # ← Debe coincidir exactamente con el nombre en Render
     runtime: docker
     rootDir: servicio_usuarios
     envVars:
@@ -48,7 +48,7 @@ services:
     name: gateway-nginx
     runtime: docker
     rootDir: nginx
-    healthCheckPath: /__health
+    healthCheckPath: /__health         # endpoint estático en Nginx
     envVars:
       - key: USUARIOS_HOSTPORT
         fromService: { name: servicio-usuarios, type: pserv, property: hostport }
