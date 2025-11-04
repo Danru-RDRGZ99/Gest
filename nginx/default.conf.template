@@ -1,8 +1,8 @@
 limit_req_zone $binary_remote_addr zone=reserva_limit:10m rate=10r/m;
 
-upstream servicio_usuarios    { server ${USUARIOS_HOSTPORT}; }
-upstream servicio_reservas    { server ${RESERVAS_HOSTPORT}; }
-upstream servicio_inventario  { server ${INVENTARIO_HOSTPORT}; }
+upstream servicio_usuarios   { server servicio-usuarios-abcde:10000; }
+upstream servicio_reservas   { server servicio-reservas-fghij:10000; }
+upstream servicio_inventario { server servicio-inventario-klmno:10000; }
 
 server {
     listen 10000;
@@ -48,3 +48,4 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
+
