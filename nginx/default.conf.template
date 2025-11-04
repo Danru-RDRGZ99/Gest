@@ -5,8 +5,15 @@ upstream servicio_reservas    { server ${RESERVAS_HOSTPORT}; }
 upstream servicio_inventario  { server ${INVENTARIO_HOSTPORT}; }
 
 server {
-    listen 10000;    # Render expone $PORT=10000
+    listen 10000;
     server_name _;
+
+    # ✅ Static health for Render
+    location = /__health {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 "ok\n";
+    }
 
     location /ws {
         proxy_pass http://servicio_reservas;
