@@ -1,51 +1,50 @@
-limit_req_zone $binary_remote_addr zone=reserva_limit:10m rate=10r/m;
-
-upstream servicio_usuarios   { server servicio-usuarios-abcde:10000; }
-upstream servicio_reservas   { server servicio-reservas-fghij:10000; }
-upstream servicio_inventario { server servicio-inventario-klmno:10000; }
-
+# Configuración Nginx para Render con envsubst
 server {
+    # Render asigna el puerto a la app web (Nginx lo escucha dentro del contenedor)
     listen 10000;
-    server_name _;
 
-    # ✅ Static health for Render
+    # --- Healthcheck trivial para Render ---
     location = /__health {
-        access_log off;
+        return 200 'ok';
         add_header Content-Type text/plain;
-        return 200 "ok\n";
     }
 
+    # --- Upstreams (inyectados por envsubst) ---
+    # Ejemplos tras expansión: servicio-usuarios:10000, etc.
+    upstream servicio_usuarios {
+        server ${USUARIOS_HOSTPORT};
+    }
+    upstream servicio_reservas {
+        server ${RESERVAS_HOSTPORT};
+    }
+    upstream servicio_inventario {
+        server ${INVENTARIO_HOSTPORT};
+    }
+
+    # --- WebSocket (si lo usas para reservas) ---
     location /ws {
         proxy_pass http://servicio_reservas;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "Upgrade";
         proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 300s;
     }
 
+    # --- Rutas de usuarios (auth, token, captcha, etc.) ---
     location ~ ^/(token|register|auth|usuarios|captcha) {
         proxy_pass http://servicio_usuarios;
         proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # --- Rutas de reservas ---
     location ~ ^/(reservas|laboratorios/.*/horario|admin/horarios) {
-        limit_req zone=reserva_limit burst=20 nodelay;
         proxy_pass http://servicio_reservas;
         proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # --- Todo lo demás va a inventario ---
     location / {
         proxy_pass http://servicio_inventario;
         proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
-
