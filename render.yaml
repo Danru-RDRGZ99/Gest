@@ -1,9 +1,9 @@
 services:
-  # ── API Gateway (público) ──────────────────────────────────────────────
   - type: web
     name: gateway-nginx
     runtime: docker
-    rootDir: nginx
+    rootDir: nginx                # Dockerfile lives in /nginx
+    healthCheckPath: /__health    # ✅ use the static endpoint
     envVars:
       - key: USUARIOS_HOSTPORT
         fromService: { name: servicio-usuarios, type: pserv, property: hostport }
@@ -11,9 +11,7 @@ services:
         fromService: { name: servicio-reservas, type: pserv, property: hostport }
       - key: INVENTARIO_HOSTPORT
         fromService: { name: servicio-inventario, type: pserv, property: hostport }
-    healthCheckPath: /        # Nginx responde 200 en /
 
-  # ── Usuarios (privado) ─────────────────────────────────────────────────
   - type: pserv
     name: servicio-usuarios
     runtime: docker
@@ -22,14 +20,11 @@ services:
       - key: PORT
         value: "10000"
       - key: DATABASE_URL
-        value: "<INTERNAL_DB_URL>"       # pega la URL interna de tu Postgres de Render
+        value: "<INTERNAL_DB_URL>"
       - key: JWT_SECRET_KEY
-        value: "<TU_SECRETO_JWT>"
-      - key: ACCESS_TOKEN_EXPIRE_MINUTES
-        value: "60"
+        value: "<YOUR_SECRET>"
     healthCheckPath: /health
 
-  # ── Reservas (privado) ─────────────────────────────────────────────────
   - type: pserv
     name: servicio-reservas
     runtime: docker
@@ -40,15 +35,11 @@ services:
       - key: DATABASE_URL
         value: "<INTERNAL_DB_URL>"
       - key: JWT_SECRET_KEY
-        value: "<TU_SECRETO_JWT>"
-      - key: ACCESS_TOKEN_EXPIRE_MINUTES
-        value: "60"
-      # URL del servicio de usuarios (para llamadas S2S)
+        value: "<YOUR_SECRET>"
       - key: USER_SERVICE_URL
         fromService: { name: servicio-usuarios, type: pserv, property: hostport }
     healthCheckPath: /health
 
-  # ── Inventario (privado) ───────────────────────────────────────────────
   - type: pserv
     name: servicio-inventario
     runtime: docker
@@ -59,10 +50,7 @@ services:
       - key: DATABASE_URL
         value: "<INTERNAL_DB_URL>"
       - key: JWT_SECRET_KEY
-        value: "<TU_SECRETO_JWT>"
-      - key: ACCESS_TOKEN_EXPIRE_MINUTES
-        value: "60"
-      # URLs de servicios vecinos
+        value: "<YOUR_SECRET>"
       - key: USER_SERVICE_URL
         fromService: { name: servicio-usuarios, type: pserv, property: hostport }
       - key: RESERVA_SERVICE_URL
