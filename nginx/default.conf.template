@@ -1,61 +1,49 @@
-# nginx/default.conf.template
-worker_processes 1;
+# nginx/default.conf.template (para Railway)
+server {
+  listen ${PORT};
+  server_name _;
 
-events { worker_connections 1024; }
-
-http {
-  # Rate limit opcional
-  limit_req_zone $binary_remote_addr zone=reserva_limit:10m rate=10r/m;
-
-  # Resolver para dominios en proxy_pass con variables
-  # (127.0.0.11 funciona en la mayoría de runtimes Docker; si Railway expone otro,
-  # el contenedor sigue usando /etc/resolv.conf igualmente).
+  # Necesario para proxy_pass con variables y hostnames
   resolver 127.0.0.11 ipv6=off valid=10s;
 
-  server {
-    listen ${PORT};
-    server_name _;
+  # WebSocket hacia reservas
+  location /ws {
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "Upgrade";
+    proxy_set_header Host $host;
+    proxy_read_timeout 60s;
+    proxy_connect_timeout 10s;
+    proxy_pass ${RESERVAS_URL};
+  }
 
-    # WebSocket hacia reservas
-    location /ws {
-      proxy_http_version 1.1;
-      proxy_set_header Upgrade $http_upgrade;
-      proxy_set_header Connection "Upgrade";
-      proxy_set_header Host $host;
-      proxy_read_timeout 60s;
-      proxy_connect_timeout 10s;
-      proxy_pass ${RESERVAS_URL};
-    }
+  # Usuarios (auth, token, captcha, etc.)
+  location ~ ^/(token|register|auth|usuarios|captcha) {
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass ${USUARIOS_URL};
+  }
 
-    # Usuarios (auth, token, captcha, etc.)
-    location ~ ^/(token|register|auth|usuarios|captcha) {
-      proxy_set_header Host $host;
-      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-      proxy_set_header X-Forwarded-Proto $scheme;
-      proxy_pass ${USUARIOS_URL};
-    }
+  # Reservas y horarios
+  location ~ ^/(reservas|laboratorios/.*/horario|admin/horarios) {
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass ${RESERVAS_URL};
+  }
 
-    # Reservas y horarios
-    location ~ ^/(reservas|laboratorios/.*/horario|admin/horarios) {
-      limit_req zone=reserva_limit burst=20 nodelay;
-      proxy_set_header Host $host;
-      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-      proxy_set_header X-Forwarded-Proto $scheme;
-      proxy_pass ${RESERVAS_URL};
-    }
+  # Resto al inventario
+  location / {
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass ${INVENTARIO_URL};
+  }
 
-    # Resto al inventario
-    location / {
-      proxy_set_header Host $host;
-      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-      proxy_set_header X-Forwarded-Proto $scheme;
-      proxy_pass ${INVENTARIO_URL};
-    }
-
-    # Healthcheck estático
-    location = /__health {
-      add_header Content-Type application/json;
-      return 200 '{"status":"ok"}';
-    }
+  # Healthcheck para Railway
+  location = /__health {
+    add_header Content-Type application/json;
+    return 200 '{"status":"ok"}';
   }
 }
