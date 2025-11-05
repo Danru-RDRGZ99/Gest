@@ -1,57 +1,45 @@
-# Fuera de server {}
-map $http_upgrade $connection_upgrade {
-  default upgrade;
-  ''      close;
-}
-
 server {
   listen ${PORT};
   server_name _;
 
-  # --- WebSocket a reservas ---
-  location /ws {
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection $connection_upgrade;
-    proxy_set_header Host $host;
-    proxy_read_timeout 60s;
-    proxy_connect_timeout 10s;
-    proxy_ssl_server_name on;             # habilita SNI si proxy_pass es https
-    proxy_pass ${RESERVAS_URL};
+  # Healthcheck del gateway
+  location = /__health {
+    add_header Content-Type application/json;
+    return 200 '{"status":"ok"}';
   }
 
-  # --- Auth / Usuarios ---
-  location ~ ^/(token|register|auth|usuarios|captcha) {
+  # --- Usuarios: captcha, token, register y cualquier ruta /usuarios...
+  location ~ ^/(captcha|token|register|auth|usuarios(?:/.*)?)$ {
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_read_timeout 60s;
-    proxy_ssl_server_name on;             # importante si ${USUARIOS_URL} es https
-    proxy_pass ${USUARIOS_URL};
+    proxy_pass http://servicio-usuarios.railway.internal;
   }
 
-  # --- Reservas / Horarios ---
+  # --- WebSocket hacia reservas
+  location /ws {
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "Upgrade";
+    proxy_set_header Host $host;
+    proxy_read_timeout 60s;
+    proxy_connect_timeout 10s;
+    proxy_pass http://servicio-reservas.railway.internal;
+  }
+
+  # --- Reservas
   location ~ ^/(reservas|laboratorios/.*/horario|admin/horarios) {
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_read_timeout 60s;
-    proxy_ssl_server_name on;
-    proxy_pass ${RESERVAS_URL};
+    proxy_pass http://servicio-reservas.railway.internal;
   }
 
-  # --- Resto al inventario ---
+  # --- Inventario (fallback)
   location / {
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_read_timeout 60s;
-    proxy_ssl_server_name on;
-    proxy_pass ${INVENTARIO_URL};
-  }
-
-  location = /__health {
-    add_header Content-Type application/json;
-    return 200 '{"status":"ok"}';
+    proxy_pass http://servicio-inventario.railway.internal;
   }
 }
