@@ -4,17 +4,17 @@ FROM python:3.11-slim
 # 2. Establecer el directorio de trabajo dentro del contenedor
 WORKDIR /app
 
-# 3. Copiar el archivo de requerimientos
-COPY requirements_usuarios.txt .
+# 3. Copiar el archivo de requerimientos (desde la subcarpeta correcta)
+COPY servicio_usuarios/requirements_usuarios.txt .
 
 # 4. Instalar las dependencias
 RUN pip install --no-cache-dir -r requirements_usuarios.txt
 
-# 5. Copiar todo el código del servicio
-COPY . .
+# 5. Copiar todo el código del servicio (solo esta subcarpeta)
+COPY servicio_usuarios/ .
 
-# 6. Exponer el puerto en el que corre el servicio
-EXPOSE 8001
+# 6. Exponer el puerto que Railway nos dará (opcional pero buena práctica)
+EXPOSE $PORT
 
-# 7. El comando para iniciar el servidor (escuchando en 0.0.0.0)
-CMD ["uvicorn", "main_usuarios:app", "--host", "0.0.0.0", "--port", "8001"]
+# 7. El comando para iniciar el servidor (USANDO $PORT, NO 8001)
+CMD ["uvicorn", "main_usuarios:app", "--host", "0.0.0.0", "--port", "$PORT"]
