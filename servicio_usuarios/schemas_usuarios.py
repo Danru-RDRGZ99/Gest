@@ -1,5 +1,15 @@
-from typing import Optional, List
+# servicio_usuarios/schemas_usuarios.py  (referencia)
 from pydantic import BaseModel, EmailStr, ConfigDict
+from typing import Optional
+
+class UsuarioBase(BaseModel):
+    nombre: str
+    correo: EmailStr
+    user: str
+    rol: str
+
+class UsuarioCreate(UsuarioBase):
+    password: str
 
 class Usuario(BaseModel):
     id: int
@@ -8,13 +18,6 @@ class Usuario(BaseModel):
     user: str
     rol: str
     model_config = ConfigDict(from_attributes=True)
-
-class UsuarioCreate(BaseModel):
-    nombre: str
-    correo: EmailStr
-    user: str
-    password: str
-    rol: str
 
 class ProfileUpdate(BaseModel):
     nombre: Optional[str] = None
@@ -28,7 +31,3 @@ class PasswordUpdate(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
-    user: Usuario
-
-class TokenWithRoutes(Token):
-    allowed_routes: List[str]
