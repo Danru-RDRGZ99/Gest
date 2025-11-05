@@ -17,4 +17,4 @@ COPY servicio_inventario/ .
 EXPOSE $PORT
 
 # 7. El comando para iniciar el servidor (USANDO $PORT, NO 8003)
-CMD ["uvicorn", "main_inventario:app", "--host", "0.0.0.0", "--port", "$PORT"]
+CMD uvicorn main_inventario:app --host 0.0.0.0 --port $PORT

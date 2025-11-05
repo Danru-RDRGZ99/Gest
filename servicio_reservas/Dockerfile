@@ -17,4 +17,4 @@ COPY servicio_reservas/ .
 EXPOSE $PORT
 
 # 7. El comando para iniciar el servidor (USANDO $PORT, NO 8002)
-CMD ["uvicorn", "main_reservas:app", "--host", "0.0.0.0", "--port", "$PORT"]
+CMD uvicorn main_reservas:app --host 0.0.0.0 --port $PORT
