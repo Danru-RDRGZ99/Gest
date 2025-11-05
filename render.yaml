@@ -6,12 +6,12 @@ services:
     rootDir: servicio_usuarios
     envVars:
       - key: PORT
-        value: "10000"
+        value: "8001"  # <-- CORREGIDO
       - key: DATABASE_URL
         value: "postgresql://admin:29VnOOPbSNH5dWrafi31jQMLVTYyxQrfi@dpg-d44d5i3uibrs73er6k2g-a/laboratorios_2wcy"
       - key: JWT_SECRET_KEY
-        value: "<TU_SECRETO_JWT>"
-    healthCheckPath: /openapi.json
+        value: "<PON_TU_SECRETO_AQUÍ>"
+    # healthCheckPath: /openapi.json  <-- ELIMINADO (pserv no lo permite)
 
   # ========= Reservas =========
   - type: pserv
@@ -20,15 +20,14 @@ services:
     rootDir: servicio_reservas
     envVars:
       - key: PORT
-        value: "10000"
+        value: "8002"  # <-- CORREGIDO
       - key: DATABASE_URL
         value: "postgresql://admin:29VnOOPbSNH5dWrafi31jQMLVTYyxQrfi@dpg-d44d5i3uibrs73er6k2g-a/laboratorios_2wcy"
       - key: JWT_SECRET_KEY
-        value: "<TU_SECRETO_JWT>"
-      # host:port interno del servicio de usuarios
+        value: "<PON_TU_SECRETO_AQUÍ>"
       - key: USER_SERVICE_URL
         fromService: { name: servicio-usuarios, type: pserv, property: hostport }
-    healthCheckPath: /openapi.json
+    # healthCheckPath: /openapi.json  <-- ELIMINADO
 
   # ========= Inventario =========
   - type: pserv
@@ -37,24 +36,23 @@ services:
     rootDir: servicio_inventario
     envVars:
       - key: PORT
-        value: "10000"
+        value: "8003"  # <-- CORREGIDO
       - key: DATABASE_URL
         value: "postgresql://admin:29VnOOPbSNH5dWrafi31jQMLVTYyxQrfi@dpg-d44d5i3uibrs73er6k2g-a/laboratorios_2wcy"
       - key: JWT_SECRET_KEY
-        value: "<TU_SECRETO_JWT>"
-      # host:port internos para Usuarios y Reservas
+        value: "<PON_TU_SECRETO_AQUÍ>"
       - key: USER_SERVICE_URL
         fromService: { name: servicio-usuarios, type: pserv, property: hostport }
       - key: RESERVA_SERVICE_URL
         fromService: { name: servicio-reservas, type: pserv, property: hostport }
-    healthCheckPath: /openapi.json
+    # healthCheckPath: /openapi.json  <-- ELIMINADO
 
   # ========= Gateway Nginx =========
   - type: web
     name: gateway-nginx
     runtime: docker
     rootDir: nginx
-    healthCheckPath: /__health
+    healthCheckPath: /__health # <-- ESTE SÍ ESTÁ BIEN (porque es type: web)
     envVars:
       - key: USUARIOS_HOSTPORT
         fromService: { name: servicio-usuarios, type: pserv, property: hostport }
