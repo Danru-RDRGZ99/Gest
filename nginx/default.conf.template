@@ -2,56 +2,51 @@ server {
   listen ${PORT};
   server_name _;
 
-  # Healthcheck Railway
-  location = /__health {
-    default_type application/json;
-    return 200 '{"status":"ok"}';
-  }
+  # DNS interno de Docker dentro de Railway. Desactiva IPv6 si da guerra.
+  resolver 127.0.0.11 ipv6=off valid=10s;
 
-  # Usuarios (token, registro, captcha, usuarios)
-  location ~ ^/(token|register|auth|usuarios|captcha) {
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_connect_timeout 10s;
-    proxy_read_timeout 60s;
-    proxy_pass ${USUARIOS_URL};
-  }
+  # Variables inyectadas desde las env vars del servicio gateway
+  set $USUARIOS   ${USUARIOS_URL};
+  set $RESERVAS   ${RESERVAS_URL};
+  set $INVENTARIO ${INVENTARIO_URL};
 
-  # WebSocket de reservas
+  # Headers comunes
+  proxy_set_header Host               $host;
+  proxy_set_header X-Real-IP          $remote_addr;
+  proxy_set_header X-Forwarded-For    $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto  $scheme;
+
+  # Timeouts razonables para evitar 504 en servicios lentos
+  proxy_connect_timeout 5s;
+  proxy_send_timeout    60s;
+  proxy_read_timeout    60s;
+
+  # WebSocket (si reservas usa WS)
   location /ws {
     proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Upgrade  $http_upgrade;
     proxy_set_header Connection "Upgrade";
-    proxy_set_header Host $host;
-    proxy_connect_timeout 10s;
-    proxy_read_timeout 60s;
-    proxy_pass ${RESERVAS_URL};
+    proxy_pass $RESERVAS;
   }
 
-  # Reservas (HTTP)
+  # Auth, usuarios, captcha
+  location ~ ^/(token|register|auth|usuarios|captcha) {
+    proxy_pass $USUARIOS;
+  }
+
+  # Reservas/horarios
   location ~ ^/(reservas|laboratorios/.*/horario|admin/horarios) {
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_connect_timeout 10s;
-    proxy_read_timeout 60s;
-    proxy_pass ${RESERVAS_URL};
+    proxy_pass $RESERVAS;
   }
 
-  # Todo lo demás al servicio de inventario
+  # Todo lo demás al inventario
   location / {
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_connect_timeout 10s;
-    proxy_read_timeout 60s;
-    proxy_pass ${INVENTARIO_URL};
+    proxy_pass $INVENTARIO;
+  }
+
+  # Health
+  location = /__health {
+    add_header Content-Type application/json;
+    return 200 '{"status":"ok"}';
   }
 }
