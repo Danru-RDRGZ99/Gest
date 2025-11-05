@@ -1,8 +1,8 @@
-# Usar la imagen base de Nginx
+# 1. Usar la imagen base de Nginx
 FROM nginx:latest
 
-# Eliminar la configuración por defecto
+# 2. Eliminar la configuración por defecto
 RUN rm /etc/nginx/conf.d/default.conf
 
-# Copiar nuestra nueva configuración estática
+# 3. Copiar nuestra configuración estática de Railway
 COPY nginx.conf /etc/nginx/nginx.conf
