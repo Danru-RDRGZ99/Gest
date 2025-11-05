@@ -4,5 +4,5 @@ FROM nginx:latest
 # 2. Eliminar la configuración por defecto
 RUN rm /etc/nginx/conf.d/default.conf
 
-# 3. Copiar nuestra configuración estática de Railway
+# 3. Copiar nuestra configuración estática de Railway (del Archivo 2)
 COPY nginx.conf /etc/nginx/nginx.conf
