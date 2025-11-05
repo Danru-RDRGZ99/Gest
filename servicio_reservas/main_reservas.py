@@ -5,6 +5,7 @@ from typing import List, Annotated, Optional, Dict, Tuple
 from datetime import datetime, timedelta, timezone, date, time
 import traceback
 from collections import defaultdict
+from db import engine, SessionLocal, get_db
 
 # --- Configuración y Otros ---
 from starlette.config import Config
