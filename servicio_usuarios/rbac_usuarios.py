@@ -1,7 +1,11 @@
 ALLOWED={
-    "admin":["dashboard","planteles","laboratorios","recursos","reservas","usuarios"],
+    "admin":["*"],
     "docente":["dashboard","recursos","reservas","ajustes"],
     "estudiante":["dashboard","recursos","ajustes"],
 }
-def allowed_routes(role:str):
-    return ALLOWED.get(role,["dashboard"])
+
+def is_route_allowed(role: str, route: str) -> bool:
+    if role == "admin":
+        return True  # <-- admin sin restricciones
+    allowed = ALLOWED_BY_ROLE.get(role, set())
+    return "*" in allowed or route in allowed
