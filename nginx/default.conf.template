@@ -1,49 +1,55 @@
-# nginx/default.conf.template (para Railway)
+# nginx/default.conf.template
 server {
+  # En Railway Nginx debe escuchar en el puerto que inyecta la plataforma
   listen ${PORT};
   server_name _;
 
-  # Necesario para proxy_pass con variables y hostnames
-  resolver 127.0.0.11 ipv6=off valid=10s;
+  # Resolver público (Railway no usa 127.0.0.11 de Docker)
+  resolver 1.1.1.1 8.8.8.8 [2606:4700:4700::1111] [2001:4860:4860::8888] valid=10s;
+  resolver_timeout 5s;
 
-  # WebSocket hacia reservas
+  # Construimos URLs con esquema a partir de host:port internos
+  set $usuarios   http://$USUARIOS_HOSTPORT;
+  set $reservas   http://$RESERVAS_HOSTPORT;
+  set $inventario http://$INVENTARIO_HOSTPORT;
+
+  # Healthcheck del gateway
+  location = /__health {
+    default_type application/json;
+    return 200 '{"status":"ok"}';
+  }
+
+  # --- WebSocket (si reservas expone /ws) ---
   location /ws {
+    proxy_pass $reservas;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "Upgrade";
-    proxy_set_header Host $host;
-    proxy_read_timeout 60s;
-    proxy_connect_timeout 10s;
-    proxy_pass ${RESERVAS_URL};
+    include /etc/nginx/proxy_params;
   }
 
-  # Usuarios (auth, token, captcha, etc.)
-  location ~ ^/(token|register|auth|usuarios|captcha) {
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_pass ${USUARIOS_URL};
-  }
+  # --- Usuarios: captcha, token, register, auth, usuarios ---
+  location = /captcha  { proxy_pass $usuarios/captcha;  include /etc/nginx/proxy_params; }
+  location = /token    { proxy_pass $usuarios/token;    include /etc/nginx/proxy_params; }
+  location = /register { proxy_pass $usuarios/register; include /etc/nginx/proxy_params; }
+  location /auth/      { proxy_pass $usuarios$request_uri; include /etc/nginx/proxy_params; }
+  location /usuarios/  { proxy_pass $usuarios$request_uri; include /etc/nginx/proxy_params; }
 
-  # Reservas y horarios
-  location ~ ^/(reservas|laboratorios/.*/horario|admin/horarios) {
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_pass ${RESERVAS_URL};
-  }
+  # --- Reservas / horarios ---
+  location /reservas/  { proxy_pass $reservas$request_uri; include /etc/nginx/proxy_params; }
+  location ~ ^/laboratorios/.*/horario { proxy_pass $reservas$request_uri; include /etc/nginx/proxy_params; }
+  location /admin/horarios { proxy_pass $reservas$request_uri; include /etc/nginx/proxy_params; }
 
-  # Resto al inventario
-  location / {
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_pass ${INVENTARIO_URL};
-  }
+  # --- Inventario (resto) ---
+  location /prestamos/    { proxy_pass $inventario$request_uri; include /etc/nginx/proxy_params; }
+  location /recursos/     { proxy_pass $inventario$request_uri; include /etc/nginx/proxy_params; }
+  location /planteles/    { proxy_pass $inventario$request_uri; include /etc/nginx/proxy_params; }
+  location /laboratorios/ { proxy_pass $inventario$request_uri; include /etc/nginx/proxy_params; }
 
-  # Healthcheck para Railway
-  location = /__health {
-    add_header Content-Type application/json;
-    return 200 '{"status":"ok"}';
-  }
+  # Timeouts y reintentos amables
+  proxy_connect_timeout 5s;
+  proxy_read_timeout 60s;
+  proxy_send_timeout 60s;
+  proxy_next_upstream error timeout invalid_header http_502 http_503 http_504;
+  proxy_next_upstream_tries 2;
 }
