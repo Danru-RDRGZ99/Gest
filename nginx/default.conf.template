@@ -1,45 +1,55 @@
+# ---- estas directivas van FUERA de server ----
+# Para WebSocket (Connection: upgrade/close)
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
 server {
   listen ${PORT};
   server_name _;
 
-  # Cabeceras comunes
-  proxy_set_header Host $host;
-  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-  proxy_set_header X-Forwarded-Proto $scheme;
-  proxy_http_version 1.1;
+  # Si usas variables de entorno con envsubst, NO necesitas 'resolver'
+  # resolver 1.1.1.1 8.8.8.8 valid=30s;  # (opcional solo si usas proxy_pass con variables en tiempo de ejecución)
 
-  # WebSocket (si aplica)
-  map $http_upgrade $connection_upgrade {
-    default upgrade;
-    ''      close;
-  }
-
+  # --- WebSocket hacia reservas ---
   location /ws {
+    proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
     proxy_read_timeout 60s;
     proxy_connect_timeout 10s;
     proxy_pass ${RESERVAS_URL};
   }
 
-  # Auth / Usuarios
+  # --- Rutas de autenticación/usuarios ---
   location ~ ^/(token|register|auth|usuarios|captcha) {
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
     proxy_pass ${USUARIOS_URL};
   }
 
-  # Reservas
+  # --- Reservas y horarios ---
   location ~ ^/(reservas|laboratorios/.*/horario|admin/horarios) {
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
     proxy_pass ${RESERVAS_URL};
   }
 
-  # Resto → Inventario
+  # --- Resto al inventario ---
   location / {
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
     proxy_pass ${INVENTARIO_URL};
   }
 
-  # Healthcheck
+  # --- Healthcheck ---
   location = /__health {
-    add_header Content-Type text/plain;
-    return 200 "ok";
+    add_header Content-Type application/json;
+    return 200 '{"status":"ok"}';
   }
 }
