@@ -1,11 +1,22 @@
-ALLOWED={
-    "admin":["*"],
-    "docente":["dashboard","recursos","reservas","ajustes"],
-    "estudiante":["dashboard","recursos","ajustes"],
+from typing import List
+
+ROUTES = {
+    "root": "/",
+    "dashboard": "/dashboard",
+    "ajustes": "/ajustes",
+    "prestamos": "/prestamos",
+    "planteles": "/planteles",
+    "laboratorios": "/laboratorios",
+    "usuarios": "/usuarios",
+    "captcha-request": "/captcha",
+    "captcha-verify": "/captcha-verify",
 }
 
-def is_route_allowed(role: str, route: str) -> bool:
+def allowed_routes(role: str) -> List[str]:
     if role == "admin":
-        return True  # <-- admin sin restricciones
-    allowed = ALLOWED.get(role, set())
-    return "*" in allowed or route in allowed
+        return list(ROUTES.values())
+    if role == "docente":
+        return [ROUTES["dashboard"], ROUTES["prestamos"], ROUTES["laboratorios"], ROUTES["planteles"]]
+    if role == "estudiante":
+        return [ROUTES["dashboard"], ROUTES["prestamos"]]
+    return [ROUTES["root"]]
