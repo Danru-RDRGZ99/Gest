@@ -4,7 +4,6 @@ FROM nginx:latest
 RUN rm /etc/nginx/conf.d/default.conf
 
 # 2. CREAR el archivo nginx.conf.template directamente
-#    (Usamos 'cat <<EOF' para pegar texto multilinea)
 RUN cat <<'EOF' > /etc/nginx/nginx.conf.template
 worker_processes 1;
 events { worker_connections 1024; }
@@ -74,8 +73,9 @@ envsubst '$USUARIOS_HOSTPORT,$RESERVAS_HOSTPORT,$INVENTARIO_HOSTPORT' < /etc/ngi
 nginx -g 'daemon off;'
 EOF
 
-# 4. Darle permisos de ejecución al script que acabamos de crear
-RUN chmod +x /docker-entrypoint.sh
+# 4. ---- ESTA ES LA LÍNEA MODIFICADA ----
+#    Arregla los finales de línea (quita \r) Y da permisos
+RUN sed -i 's/\r$//' /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
 
 # 5. Definir el script como el punto de entrada
 ENTRYPOINT ["/docker-entrypoint.sh"]
