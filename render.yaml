@@ -1,62 +1,70 @@
+# Plano maestro para Render.com
+
+databases:
+  - name: gest-db
+    databaseName: laboratorios
+    user: admin
+    plan: free 
+
 services:
-  # ========= Usuarios =========
-  - type: pserv
-    name: servicio-usuarios
-    runtime: docker
-    rootDir: servicio_usuarios
-    envVars:
-      - key: PORT
-        value: "8001"  # <-- CORREGIDO
-      - key: DATABASE_URL
-        value: "postgresql://admin:29VnOOPbSNH5dWrafi31jQMLVTYyxQrfi@dpg-d44d5i3uibrs73er6k2g-a/laboratorios_2wcy"
-      - key: JWT_SECRET_KEY
-        value: "<PON_TU_SECRETO_AQUÍ>"
-    # healthCheckPath: /openapi.json  <-- ELIMINADO (pserv no lo permite)
 
-  # ========= Reservas =========
-  - type: pserv
-    name: servicio-reservas
-    runtime: docker
-    rootDir: servicio_reservas
-    envVars:
-      - key: PORT
-        value: "8002"  # <-- CORREGIDO
-      - key: DATABASE_URL
-        value: "postgresql://admin:29VnOOPbSNH5dWrafi31jQMLVTYyxQrfi@dpg-d44d5i3uibrs73er6k2g-a/laboratorios_2wcy"
-      - key: JWT_SECRET_KEY
-        value: "<PON_TU_SECRETO_AQUÍ>"
-      - key: USER_SERVICE_URL
-        fromService: { name: servicio-usuarios, type: pserv, property: hostport }
-    # healthCheckPath: /openapi.json  <-- ELIMINADO
-
-  # ========= Inventario =========
-  - type: pserv
-    name: servicio-inventario
-    runtime: docker
-    rootDir: servicio_inventario
-    envVars:
-      - key: PORT
-        value: "8003"  # <-- CORREGIDO
-      - key: DATABASE_URL
-        value: "postgresql://admin:29VnOOPbSNH5dWrafi31jQMLVTYyxQrfi@dpg-d44d5i3uibrs73er6k2g-a/laboratorios_2wcy"
-      - key: JWT_SECRET_KEY
-        value: "<PON_TU_SECRETO_AQUÍ>"
-      - key: USER_SERVICE_URL
-        fromService: { name: servicio-usuarios, type: pserv, property: hostport }
-      - key: RESERVA_SERVICE_URL
-        fromService: { name: servicio-reservas, type: pserv, property: hostport }
-    # healthCheckPath: /openapi.json  <-- ELIMINADO
-
-  # ========= Gateway Nginx =========
+  # 1. Servicio de Usuarios
   - type: web
-    name: gateway-nginx
+    name: servicio-usuarios
+    plan: free
     runtime: docker
-    rootDir: nginx
-    healthCheckPath: /__health # <-- ESTE SÍ ESTÁ BIEN (porque es type: web)
+    dockerfilePath: ./servicio_usuarios/Dockerfile
     envVars:
-      - key: USUARIOS_HOSTPORT
-        fromService: { name: servicio-usuarios, type: pserv, property: hostport }
-      - key: RESERVAS_HOSTPORT
-        fromService: { name: servicio-reservas, type: pserv, property: hostport }
-      - key: INVENTARIO_HOSTPORT
-        fromService: { name: servicio-inventario, type: pserv, property: hostport }
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gest-db
+          property: internalConnectionString # <-- ¡CORREGIDO!
+      - key: JWT_SECRET_KEY
+        generateValue: true 
+
+  # 2. Servicio de Reservas
+  - type: web
+    name: servicio-reservas
+    plan: free
+    runtime: docker
+    dockerfilePath: ./servicio_reservas/Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gest-db
+          property: internalConnectionString # <-- ¡CORREGIDO!
+      - key: JWT_SECRET_KEY
+        fromService:
+          type: web
+          name: servicio-usuarios
+          envVarKey: JWT_SECRET_KEY
+      - key: USER_SERVICE_URL
+        value: http://servicio-usuarios:8001
+
+  # 3. Servicio de Inventario
+  - type: web
+    name: servicio-inventario
+    plan: free
+    runtime: docker
+    dockerfilePath: ./servicio_inventario/Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gest-db
+          property: internalConnectionString # <-- ¡CORREGIDO!
+      - key: JWT_SECRET_KEY
+        fromService:
+          type: web
+          name: servicio-usuarios
+          envVarKey: JWT_SECRET_KEY
+      - key: USER_SERVICE_URL
+        value: http://servicio-usuarios:8001
+      - key: RESERVA_SERVICE_URL
+        value: http://servicio-reservas:8002
+
+  # 4. El API Gateway (Nginx) - ¡Este es tu servicio público!
+  - type: web
+    name: gest-gateway
+    plan: free
+    runtime: docker
+    dockerfilePath: ./nginx/Dockerfile
