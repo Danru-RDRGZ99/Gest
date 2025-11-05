@@ -2,7 +2,7 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Annotated, Optional
-from datetime import timezone
+from datetime import timezone, datetime # Asegúrate de importar datetime
 from starlette.config import Config
 import httpx
 
@@ -19,9 +19,15 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# --- CORRECCIÓN DE ARRANQUE (RACE CONDITION) ---
+# Asegura que las tablas de este modelo existan ANTES de que la app arranque.
 @app.on_event("startup")
 async def startup_event():
+    print("INFO (Inventario): Creando tablas si no existen...")
     models.Base.metadata.create_all(bind=engine)
+    print("INFO (Inventario): Tablas de inventario listas.")
+# --- FIN DE LA CORRECCIÓN ---
+
 
 @app.get("/health")
 def health():
@@ -45,6 +51,7 @@ RESERVA_SERVICE_URL = _normalize_url(config("RESERVA_SERVICE_URL", default="http
 async def _get_user_details_from_api(user_id: int) -> Optional[dict]:
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(5.0, connect=3.0)) as client:
+            # Asumiendo que esta es la ruta correcta en el servicio de usuarios
             r = await client.get(f"{USER_SERVICE_URL}/usuarios/internal/{user_id}")
             if r.status_code == 200:
                 d = r.json()
@@ -56,6 +63,7 @@ async def _get_user_details_from_api(user_id: int) -> Optional[dict]:
 async def _get_reservas_count_from_api(lab_id: int) -> int:
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(5.0, connect=3.0)) as client:
+            # Asumiendo que esta es la ruta correcta en el servicio de reservas
             r = await client.get(f"{RESERVA_SERVICE_URL}/reservas/{lab_id}/count")
             if r.status_code == 200:
                 j = r.json()
@@ -63,6 +71,8 @@ async def _get_reservas_count_from_api(lab_id: int) -> int:
             return 0
     except httpx.RequestError:
         return -1
+
+# --- Rutas de Planteles ---
 
 @app.get("/planteles", response_model=List[schemas.Plantel], tags=["Admin: Gestión"])
 def get_all_planteles(user: CurrentUser, db: DbSession):
@@ -112,6 +122,8 @@ def delete_plantel(plantel_id: int, user: AdminUser, db: DbSession):
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error interno: {e}")
 
+# --- Rutas de Laboratorios ---
+
 @app.get("/laboratorios", response_model=List[schemas.Laboratorio], tags=["Admin: Gestión"])
 def get_all_laboratorios(user: CurrentUser, db: DbSession):
     return (
@@ -131,7 +143,7 @@ def create_laboratorio(lab: schemas.LaboratorioCreate, user: AdminUser, db: DbSe
     try:
         db.commit()
         db.refresh(new_lab)
-        db.refresh(new_lab.plantel)
+        db.refresh(new_lab.plantel) # Cargar la relación
         return new_lab
     except Exception as e:
         db.rollback()
@@ -150,7 +162,7 @@ def update_laboratorio(lab_id: int, lab_update: schemas.LaboratorioCreate, user:
     try:
         db.commit()
         db.refresh(db_lab)
-        db.refresh(db_lab.plantel)
+        db.refresh(db_lab.plantel) # Cargar la relación
         return db_lab
     except Exception as e:
         db.rollback()
@@ -176,6 +188,8 @@ async def delete_laboratorio(lab_id: int, user: CurrentUser, db: DbSession):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error: {e}")
+
+# --- Rutas de Recursos ---
 
 @app.get("/recursos", response_model=List[schemas.Recurso], tags=["Recursos"])
 def get_recursos_filtrados(
@@ -214,7 +228,7 @@ def create_recurso(recurso: schemas.RecursoCreate, user: AdminUser, db: DbSessio
     try:
         db.commit()
         db.refresh(new_recurso)
-        db.refresh(new_recurso.laboratorio)
+        db.refresh(new_recurso.laboratorio) # Cargar la relación
         return new_recurso
     except Exception as e:
         db.rollback()
@@ -233,7 +247,7 @@ def update_recurso(recurso_id: int, recurso_update: schemas.RecursoCreate, user:
     try:
         db.commit()
         db.refresh(db_recurso)
-        db.refresh(db_recurso.laboratorio)
+        db.refresh(db_recurso.laboratorio) # Cargar la relación
         return db_recurso
     except Exception as e:
         db.rollback()
@@ -255,22 +269,25 @@ def delete_recurso(recurso_id: int, user: AdminUser, db: DbSession):
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error interno al eliminar recurso: {e}")
 
+# --- Rutas de Préstamos ---
+
 @app.get("/prestamos/mis-solicitudes", response_model=List[schemas.Prestamo], tags=["Préstamos"])
 def get_mis_prestamos(user: CurrentUser, db: DbSession):
     prestamos = (
         db.query(models.Prestamo)
         .options(
             joinedload(models.Prestamo.recurso).joinedload(models.Recurso.laboratorio),
-            joinedload(models.Prestamo.usuario),
+            joinedload(models.Prestamo.usuario), # Carga la relación 'usuario'
         )
         .filter(models.Prestamo.usuario_id == user["id"])
         .order_by(models.Prestamo.id.desc())
         .all()
     )
     for p in prestamos:
-        p.inicio = p.inicio.astimezone(timezone.utc)
-        p.fin = p.fin.astimezone(timezone.utc)
-        p.created_at = p.created_at.astimezone(timezone.utc)
+        # Asegurar que todas las fechas son 'aware' en UTC
+        if p.inicio: p.inicio = p.inicio.astimezone(timezone.utc)
+        if p.fin: p.fin = p.fin.astimezone(timezone.utc)
+        if p.created_at: p.created_at = p.created_at.astimezone(timezone.utc)
     return prestamos
 
 @app.post("/prestamos", response_model=schemas.Prestamo, status_code=status.HTTP_201_CREATED, tags=["Préstamos"])
@@ -278,10 +295,150 @@ async def create_prestamo(prestamo: schemas.PrestamoCreate, user: CurrentUser, d
     recurso = db.get(models.Recurso, prestamo.recurso_id)
     if not recurso:
         raise HTTPException(status_code=404, detail=f"Recurso id {prestamo.recurso_id} no encontrado.")
+    
     if prestamo.usuario_id != user["id"] and user["rol"] != "admin":
         raise HTTPException(status_code=403, detail="No autorizado para crear préstamo para otro usuario.")
+    
     user_details = await _get_user_details_from_api(prestamo.usuario_id)
     if not user_details:
         raise HTTPException(status_code=404, detail=f"Usuario id {prestamo.usuario_id} no encontrado (via servicio_usuarios).")
+    
     solicitante_nombre = user_details.get("nombre", "Usuario Desconocido")
-    inicio = prestamo.inicio.astimezone(timezone.
+    
+    inicio = prestamo.inicio.astimezone(timezone.utc)
+    fin = prestamo.fin.astimezone(timezone.utc)
+
+    if fin <= inicio:
+        raise HTTPException(status_code=400, detail="La fecha de fin debe ser posterior a la fecha de inicio.")
+
+    # Crear el modelo base del préstamo
+    new_prestamo_data = prestamo.model_dump()
+    new_prestamo = models.Prestamo(**new_prestamo_data)
+    
+    # Crear el objeto Solicitante (usuario) y asociarlo
+    solicitante = models.Solicitante(
+        id=prestamo.usuario_id,
+        nombre=solicitante_nombre
+    )
+    # Usar merge para insertar o actualizar el solicitante
+    db.merge(solicitante) 
+    new_prestamo.usuario = solicitante
+
+    try:
+        db.add(new_prestamo)
+        db.commit()
+        db.refresh(new_prestamo)
+        
+        # Refrescar relaciones para que se carguen en la respuesta
+        db.refresh(new_prestamo.recurso)
+        db.refresh(new_prestamo.usuario) 
+        
+        return new_prestamo
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Error al crear el préstamo: {e}")
+
+
+# --- INICIO DEL CÓDIGO AÑADIDO (Rutas de Admin para Préstamos) ---
+
+@app.get("/prestamos/admin/all", response_model=List[schemas.Prestamo], tags=["Admin: Préstamos"])
+def get_all_prestamos(
+    user: AdminUser,
+    db: DbSession,
+    estado: Optional[str] = None
+):
+    """
+    Obtiene todos los préstamos, filtrados opcionalmente por estado.
+    """
+    q = db.query(models.Prestamo).options(
+        joinedload(models.Prestamo.recurso).joinedload(models.Recurso.laboratorio),
+        joinedload(models.Prestamo.usuario),
+    )
+    
+    if estado:
+        q = q.filter(models.Prestamo.estado == estado)
+        
+    prestamos = q.order_by(models.Prestamo.id.desc()).all()
+    
+    for p in prestamos:
+        if p.inicio: p.inicio = p.inicio.astimezone(timezone.utc)
+        if p.fin: p.fin = p.fin.astimezone(timezone.utc)
+        if p.created_at: p.created_at = p.created_at.astimezone(timezone.utc)
+    return prestamos
+
+
+@app.put("/prestamos/{prestamo_id}/aprobar", response_model=schemas.Prestamo, tags=["Admin: Préstamos"])
+def approve_prestamo(prestamo_id: int, user: AdminUser, db: DbSession):
+    prestamo = db.get(models.Prestamo, prestamo_id)
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    if prestamo.estado != "Solicitado":
+        raise HTTPException(status_code=400, detail=f"El préstamo ya está en estado '{prestamo.estado}'.")
+
+    recurso = db.get(models.Recurso, prestamo.recurso_id)
+    if not recurso:
+        raise HTTPException(status_code=404, detail="Recurso asociado no encontrado.")
+    if recurso.estado != "Disponible":
+         raise HTTPException(status_code=409, detail=f"El recurso '{recurso.nombre}' ya no está Disponible (estado: {recurso.estado}).")
+
+    try:
+        prestamo.estado = "Aprobado"
+        recurso.estado = "En Préstamo"
+        db.commit()
+        db.refresh(prestamo)
+        db.refresh(prestamo.recurso)
+        db.refresh(prestamo.usuario)
+        return prestamo
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error interno: {e}")
+
+
+@app.put("/prestamos/{prestamo_id}/rechazar", response_model=schemas.Prestamo, tags=["Admin: Préstamos"])
+def reject_prestamo(prestamo_id: int, user: AdminUser, db: DbSession):
+    prestamo = db.get(models.Prestamo, prestamo_id)
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    if prestamo.estado != "Solicitado":
+        raise HTTPException(status_code=400, detail="Solo se pueden rechazar préstamos 'Solicitados'.")
+    
+    try:
+        prestamo.estado = "Rechazado"
+        db.commit()
+        db.refresh(prestamo)
+        db.refresh(prestamo.recurso)
+        db.refresh(prestamo.usuario)
+        return prestamo
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error interno: {e}")
+
+
+@app.put("/prestamos/{prestamo_id}/devolver", response_model=schemas.Prestamo, tags=["Admin: Préstamos"])
+def return_prestamo(prestamo_id: int, user: AdminUser, db: DbSession):
+    prestamo = db.get(models.Prestamo, prestamo_id)
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    if prestamo.estado not in ["Aprobado", "En Préstamo"]:
+        raise HTTPException(status_code=400, detail="Solo se pueden devolver préstamos 'Aprobados' o 'En Préstamo'.")
+
+    recurso = db.get(models.Recurso, prestamo.recurso_id)
+    if not recurso:
+        raise HTTPException(status_code=404, detail="Recurso asociado no encontrado.")
+
+    try:
+        prestamo.estado = "Devuelto"
+        prestamo.fin = datetime.now(timezone.utc) # Marca la hora de devolución real
+        recurso.estado = "Disponible"
+        db.commit()
+        db.refresh(prestamo)
+        db.refresh(prestamo.recurso)
+        db.refresh(prestamo.usuario)
+        return prestamo
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error interno: {e}")
+
+# (Puedes añadir /entregar si lo necesitas, pero /devolver es el más crítico)
+
+# --- FIN DEL CÓDIGO AÑADIDO ---
