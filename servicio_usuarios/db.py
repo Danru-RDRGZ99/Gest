@@ -1,11 +1,22 @@
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from dotenv import load_dotenv
+from sqlalchemy.pool import QueuePool
 
-load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL no configurada en variables de entorno")
+
+engine = create_engine(
+    DATABASE_URL,
+    poolclass=QueuePool,
+    pool_size=int(os.getenv("POOL_SIZE", 3)),   # pequeño para Railway free
+    max_overflow=int(os.getenv("MAX_OVERFLOW", 0)),
+    pool_pre_ping=True,
+    pool_recycle=1800,
+    pool_timeout=20,
+)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():

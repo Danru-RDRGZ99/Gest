@@ -1,25 +1,23 @@
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import QueuePool
 
-# Usa Railway Postgres si está seteado; si no, cae a SQLite local.
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./inventario.db")
-
-# Para SQLite en modo thread-safe
-connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL no configurada en variables de entorno")
 
 engine = create_engine(
     DATABASE_URL,
+    poolclass=QueuePool,
+    pool_size=int(os.getenv("POOL_SIZE", 3)),   # pequeño para Railway free
+    max_overflow=int(os.getenv("MAX_OVERFLOW", 0)),
     pool_pre_ping=True,
-    pool_size=int(os.getenv("POOL_SIZE", "10")),
-    max_overflow=int(os.getenv("MAX_OVERFLOW", "20")),
-    pool_timeout=int(os.getenv("POOL_TIMEOUT", "10")),
-    pool_recycle=int(os.getenv("POOL_RECYCLE", "600")),
-    connect_args=connect_args,
-    future=True,
+    pool_recycle=1800,
+    pool_timeout=20,
 )
 
-SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():
     db = SessionLocal()
