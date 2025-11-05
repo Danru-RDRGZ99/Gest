@@ -1,58 +1,57 @@
+# nginx/default.conf.template
 server {
+  # Railway inyecta ${PORT}
   listen ${PORT};
   server_name _;
 
-  # Si usas variables en proxy_pass (tras envsubst quedan literales),
-  # no necesitas resolver explícito. Lo dejamos fuera para evitar problemas.
-  # Si llegases a necesitarlo, podrías usar el resolv.conf del contenedor:
-  # resolver 127.0.0.11 ipv6=off valid=10s;
+  # IMPORTANTE: usamos variables en proxy_pass -> requiere resolver
+  # Deja ipv6=off para evitar prefijos IPv6 raros en Railway.
+  resolver 127.0.0.11 1.1.1.1 8.8.8.8 ipv6=off valid=10s;
 
-  # Healthcheck para Railway
+  # ==== Timeouts y cabeceras por defecto (aplican a todos los location) ====
+  proxy_connect_timeout 5s;
+  proxy_send_timeout 60s;
+  proxy_read_timeout 60s;
+  send_timeout 60s;
+  client_max_body_size 10m;
+
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $scheme;
+
+  # ==== Healthcheck para Railway ====
   location = /__health {
     add_header Content-Type application/json;
     return 200 '{"status":"ok"}';
   }
 
-  # WebSocket hacia reservas
+  # ==== WebSocket (servicio de reservas) ====
+  # Asegúrate de que ${RESERVAS_URL} apunte al host:puerto del servicio de reservas.
   location /ws {
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "Upgrade";
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_read_timeout 60s;
-    proxy_connect_timeout 10s;
+    proxy_read_timeout 600s;   # WS suele necesitar más tiempo
     proxy_pass ${RESERVAS_URL};
   }
 
-  # Usuarios (auth, token, captcha, etc.)
-  location ~ ^/(token|register|auth|usuarios|captcha) {
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_pass ${USUARIOS_URL};
+  # ==== Servicio de usuarios: auth, token, registro, captcha, /usuarios ====
+  # REGLA: ${USUARIOS_URL} debe incluir esquema y no llevar '/' al final.
+  # EJ: http://usuarios:8001  ó  https://tu-servicio-usuarios.up.railway.app
+  location ~ ^/(token|register|auth|usuarios|captcha)(/|$) {
+    proxy_pass ${USUARIOS_URL}$request_uri;
   }
 
-  # Reservas y horarios
-  location ~ ^/(reservas|laboratorios/.*/horario|admin/horarios) {
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_pass ${RESERVAS_URL};
+  # ==== Servicio de reservas: rutas HTTP normales ====
+  # REGLA: ${RESERVAS_URL} debe incluir esquema y no llevar '/' al final.
+  location ~ ^/(reservas|laboratorios/.*/horario|admin/horarios)(/|$) {
+    proxy_pass ${RESERVAS_URL}$request_uri;
   }
 
-  # Todo lo demás al inventario
+  # ==== Resto al servicio de inventario (API principal) ====
+  # REGLA: ${INVENTARIO_URL} debe incluir esquema y no llevar '/' al final.
   location / {
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_pass ${INVENTARIO_URL};
+    proxy_pass ${INVENTARIO_URL}$request_uri;
   }
 }

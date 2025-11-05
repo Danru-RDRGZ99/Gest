@@ -7,5 +7,5 @@ ALLOWED={
 def is_route_allowed(role: str, route: str) -> bool:
     if role == "admin":
         return True  # <-- admin sin restricciones
-    allowed = ALLOWED_BY_ROLE.get(role, set())
+    allowed = ALLOWED.get(role, set())
     return "*" in allowed or route in allowed
