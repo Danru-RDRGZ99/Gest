@@ -21,12 +21,15 @@ services:
         aliases: [db]
 
   usuarios:
-    build: ./servicio_usuarios
+    build:
+      context: .  # <-- CAMBIO: Construir desde la raíz del proyecto
+      dockerfile: ./servicio_usuarios/Dockerfile # <-- CAMBIO: Ruta al Dockerfile
     ports:
-      - "8001:8001"
+      - "8001:8001" # <-- El puerto interno 8001 DEBE ser el que espera el Dockerfile
     environment:
       - DATABASE_URL=postgresql://admin:daruAdmin@db:5432/Laboratorios
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - PORT=8001 # <-- CAMBIO: Decirle a tu app en qué puerto correr (para que coincida con --port $PORT)
     depends_on:
       db:
         condition: service_healthy
@@ -36,13 +39,16 @@ services:
     restart: unless-stopped
 
   reservas:
-    build: ./servicio_reservas
+    build:
+      context: .  # <-- CAMBIO
+      dockerfile: ./servicio_reservas/Dockerfile # <-- CAMBIO
     ports:
       - "8002:8002"
     environment:
       - DATABASE_URL=postgresql://admin:daruAdmin@db:5432/Laboratorios
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - USER_SERVICE_URL=http://usuarios:8001
+      - PORT=8002 # <-- CAMBIO
     depends_on:
       db:
         condition: service_healthy
@@ -54,7 +60,9 @@ services:
     restart: unless-stopped
 
   inventario:
-    build: ./servicio_inventario
+    build:
+      context: .  # <-- CAMBIO
+      dockerfile: ./servicio_inventario/Dockerfile # <-- CAMBIO
     ports:
       - "8003:8003"
     environment:
@@ -62,6 +70,7 @@ services:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - USER_SERVICE_URL=http://usuarios:8001
       - RESERVA_SERVICE_URL=http://reservas:8002
+      - PORT=8003 # <-- CAMBIO
     depends_on:
       db:
         condition: service_healthy
@@ -77,8 +86,9 @@ services:
   nginx:
     image: nginx:latest
     ports:
-      - "80:8000"           # Nginx will listen on 8000 inside the container
+      - "80:8000"           # El puerto 80 de tu PC se mapea al 8000 del contenedor
     volumes:
+      # Usa el nginx.conf de la RAÍZ para desarrollo local
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       usuarios:
