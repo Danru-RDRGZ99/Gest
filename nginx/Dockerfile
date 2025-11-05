@@ -14,3 +14,5 @@ RUN chmod +x /docker-entrypoint.sh
 
 # Ejecútalo al arrancar
 ENTRYPOINT ["/docker-entrypoint.sh"]
+
+# Forzar un 'cache break' para Render v1
