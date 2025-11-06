@@ -1,110 +1,58 @@
-# ===== default.conf.template (Gateway) =====
-
-upstream usuarios_upstream {
-    server ${USUARIOS_HOST}:${USUARIOS_PORT};
-    keepalive 64;
-}
-
-upstream reservas_upstream {
-    server ${RESERVAS_HOST}:${RESERVAS_PORT};
-    keepalive 64;
-}
-
-upstream inventario_upstream {
-    server ${INVENTARIO_HOST}:${INVENTARIO_PORT};
-    keepalive 64;
-}
-
 server {
-    listen ${PORT};
-    server_name _;
+  listen 80 default_server;
+  listen [::]:80 default_server;
+  server_name _;
 
-    resolver 127.0.0.11 ipv6=off valid=10s;
-    server_tokens off;
-    client_max_body_size 20m;
+  # ---------- Health ----------
+  location = /__health {
+    return 200 "OK\n";
+    add_header Content-Type text/plain;
+  }
 
-    # timeouts globales sensatos
-    proxy_connect_timeout 5s;
-    proxy_send_timeout    60s;
-    proxy_read_timeout    60s;
-    send_timeout          60s;
+  # ---------- Config común de proxy ----------
+  set $proxy_common "";
+  proxy_set_header Host              $host;
+  proxy_set_header X-Real-IP         $remote_addr;
+  proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $scheme;
+  proxy_http_version 1.1;
+  proxy_read_timeout 30s;
+  proxy_connect_timeout 5s;
+  proxy_send_timeout 30s;
 
-    # -------- Endpoints de depuración/sonda --------
-    location = /__health {
-        add_header Content-Type text/plain;
-        return 200 "gateway ok\n";
-    }
+  # ---------- Servicio USUARIOS ----------
+  # /captcha y /token NO llevan prefijo en tu front.
+  location = /captcha    { proxy_pass $USUARIOS_ORIGIN; }
+  location = /token      { proxy_pass $USUARIOS_ORIGIN; }
+  location = /register   { proxy_pass $USUARIOS_ORIGIN; }
 
-    # Sondas hacia cada servicio (útiles para probar routing/ DNS interno)
-    location = /__probe/usuarios  { proxy_pass http://usuarios_upstream/__health;  proxy_set_header Host $host; add_header X-Upstream $upstream_addr always; }
-    location = /__probe/reservas  { proxy_pass http://reservas_upstream/__health;  proxy_set_header Host $host; add_header X-Upstream $upstream_addr always; }
-    location = /__probe/inventario{ proxy_pass http://inventario_upstream/__health;proxy_set_header Host $host; add_header X-Upstream $upstream_addr always; }
+  # Todo lo que empiece con /usuarios → usuarios
+  location ^~ /usuarios/ { proxy_pass $USUARIOS_ORIGIN; }
+  location =  /usuarios  { proxy_pass $USUARIOS_ORIGIN; }
 
-    # -------- WebSocket (si lo usas) --------
-    location /ws {
-        proxy_pass http://reservas_upstream;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "Upgrade";
-        proxy_set_header Host $host;
-        proxy_read_timeout 60s;
-        add_header X-Upstream $upstream_addr always;
-    }
+  # ---------- Servicio RESERVAS ----------
+  location ^~ /reservas/ { proxy_pass $RESERVAS_ORIGIN; }
+  location =  /reservas  { proxy_pass $RESERVAS_ORIGIN; }
 
-    # -------- CAPTCHA: exact match con buffer off y header de upstream --------
-    location = /captcha {
-        proxy_pass http://usuarios_upstream/captcha;
-        proxy_http_version 1.1;
-        proxy_set_header Host              $host;
-        proxy_set_header X-Real-IP         $remote_addr;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_buffering off;
-        proxy_read_timeout 30s;
-        add_header X-Upstream $upstream_addr always;
-    }
+  # ---------- Servicio INVENTARIO / PRÉSTAMOS ----------
+  location ^~ /prestamos/    { proxy_pass $INVENTARIO_ORIGIN; }
+  location =  /prestamos     { proxy_pass $INVENTARIO_ORIGIN; }
 
-    # -------- Auth & Usuarios --------
-    location ~ ^/(captcha|token|register|usuarios|auth)(/|$) {
-        proxy_pass http://usuarios_upstream;
-        proxy_http_version 1.1;
-        proxy_set_header Host              $host;
-        proxy_set_header X-Real-IP         $remote_addr;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        add_header X-Upstream $upstream_addr always;
-    }
+  location ^~ /admin/prestamos/ { proxy_pass $INVENTARIO_ORIGIN; }
+  location =  /admin/prestamos  { proxy_pass $INVENTARIO_ORIGIN; }
 
-    # -------- Reservas y Horarios --------
-    location ~ ^/(reservas|laboratorios/.*/horario|admin/horarios|reglas_horario|excepciones_horario)(/|$) {
-        proxy_pass http://reservas_upstream;
-        proxy_http_version 1.1;
-        proxy_set_header Host              $host;
-        proxy_set_header X-Real-IP         $remote_addr;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        add_header X-Upstream $upstream_addr always;
-    }
+  location ^~ /planteles/ { proxy_pass $INVENTARIO_ORIGIN; }
+  location =  /planteles  { proxy_pass $INVENTARIO_ORIGIN; }
 
-    # -------- Inventario --------
-    location ~ ^/(prestamos|admin/prestamos|recursos|planteles|laboratorios)(/|$) {
-        proxy_pass http://inventario_upstream;
-        proxy_http_version 1.1;
-        proxy_set_header Host              $host;
-        proxy_set_header X-Real-IP         $remote_addr;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        add_header X-Upstream $upstream_addr always;
-    }
+  location ^~ /laboratorios/ { proxy_pass $INVENTARIO_ORIGIN; }
+  location =  /laboratorios  { proxy_pass $INVENTARIO_ORIGIN; }
 
-    # -------- Catch-all --------
-    location / {
-        proxy_pass http://inventario_upstream;
-        proxy_http_version 1.1;
-        proxy_set_header Host              $host;
-        proxy_set_header X-Real-IP         $remote_addr;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        add_header X-Upstream $upstream_addr always;
-    }
+  location ^~ /recursos/ { proxy_pass $INVENTARIO_ORIGIN; }
+  location =  /recursos  { proxy_pass $INVENTARIO_ORIGIN; }
+
+  # ---------- Fallback ----------
+  location / {
+    return 404 "Ruta no encontrada en gateway\n";
+    add_header Content-Type text/plain;
+  }
 }
