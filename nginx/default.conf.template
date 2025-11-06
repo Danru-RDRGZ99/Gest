@@ -1,20 +1,46 @@
-upstream usuarios_up { server servicio-usuarios.railway.internal:8001; keepalive 16; }
-upstream reservas_up { server servicio-reservas.railway.internal:8002; keepalive 16; }
+# ---------- Upstreams (resolución una vez al arrancar Nginx) ----------
+upstream usuarios_up   { server servicio-usuarios.railway.internal:8001; keepalive 16; }
+upstream reservas_up   { server servicio-reservas.railway.internal:8002; keepalive 16; }
 upstream inventario_up { server servicio-inventario.railway.internal:8003; keepalive 16; }
 
 server {
   listen 80 default_server;
   listen [::]:80 default_server;
+  server_name _;
 
+  # ---------- Health ----------
+  location = /__health {
+    add_header Content-Type text/plain;
+    return 200 "OK\n";
+  }
+
+  # ---------- Proxy headers / timeouts comunes ----------
+  proxy_set_header Host              $host;
+  proxy_set_header X-Real-IP         $remote_addr;
+  proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $scheme;
+  proxy_http_version 1.1;
+  proxy_read_timeout    30s;
+  proxy_connect_timeout 5s;
+  proxy_send_timeout    30s;
+
+  # (Opcional) buffers algo más generosos si envías JSON grandes
+  proxy_buffer_size          16k;
+  proxy_busy_buffers_size    24k;
+  proxy_buffers              8 16k;
+
+  # ---------- Rutas USUARIOS ----------
   location = /captcha    { proxy_pass http://usuarios_up; }
   location = /token      { proxy_pass http://usuarios_up; }
   location = /register   { proxy_pass http://usuarios_up; }
   location ^~ /usuarios/ { proxy_pass http://usuarios_up; }
   location =  /usuarios  { proxy_pass http://usuarios_up; }
 
+  # ---------- Rutas RESERVAS ----------
   location ^~ /reservas/ { proxy_pass http://reservas_up; }
   location =  /reservas  { proxy_pass http://reservas_up; }
 
+  # ---------- Rutas INVENTARIO / PRESTAMOS ----------
   location ^~ /prestamos/       { proxy_pass http://inventario_up; }
   location =  /prestamos        { proxy_pass http://inventario_up; }
   location ^~ /admin/prestamos/ { proxy_pass http://inventario_up; }
@@ -25,4 +51,16 @@ server {
   location =  /laboratorios     { proxy_pass http://inventario_up; }
   location ^~ /recursos/        { proxy_pass http://inventario_up; }
   location =  /recursos         { proxy_pass http://inventario_up; }
+
+  # ---------- Fallback / 4xx-5xx amigable ----------
+  error_page 502 504 = @bad_gateway;
+  location @bad_gateway {
+    add_header Content-Type text/plain;
+    return 502 "Bad Gateway (gateway): verifica que el microservicio destino esté UP y escuchando HTTP en su puerto.\n";
+  }
+
+  location / {
+    add_header Content-Type text/plain;
+    return 404 "Ruta no encontrada en gateway\n";
+  }
 }
