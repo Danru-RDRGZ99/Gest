@@ -1,168 +1,126 @@
-# ⬇️ NO pongas 'map' ni nada fuera del server; este archivo es un vhost.
+# =========================
+# nginx/default.conf.template
+# Opción B: proxy a dominios públicos (HTTPS) con SNI
+# =========================
+
 server {
   listen 80 default_server;
   listen [::]:80 default_server;
 
-  # Health
+  # --------- Debug/health ----------
   location = /__health {
     add_header Content-Type text/plain;
     return 200 "ok\n";
   }
+  # (Opcional) endpoint para ver que envsubst sí reemplazó las variables
+  location = /__vars {
+    add_header Content-Type text/plain;
+    return 200 "USUARIOS_PUBLIC=${USUARIOS_PUBLIC}\nRESERVAS_PUBLIC=${RESERVAS_PUBLIC}\nINVENTARIO_PUBLIC=${INVENTARIO_PUBLIC}\n";
+  }
 
-  # Ajustes proxy comunes
-  set $proxy_timeouts "ok"; # marcador
+  # --------- DNS + TLS a upstream públicos ----------
+  # Usamos resolvers públicos para evitar el 127.0.0.11 que te fallaba
+  resolver 1.1.1.1 8.8.8.8 valid=60s;
+  resolver_timeout 5s;
+
+  proxy_ssl_server_name on;        # SNI correcto
   proxy_http_version 1.1;
-  proxy_set_header X-Real-IP         $remote_addr;
-  proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+  proxy_set_header Connection "";  # permite keep-alive
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
   proxy_set_header X-Forwarded-Proto $scheme;
-  proxy_set_header Connection        "";
 
-  proxy_connect_timeout   10s;
-  proxy_send_timeout      60s;
-  proxy_read_timeout      60s;
-
-  # ========= USUARIOS =========
-  set $USUARIOS $USUARIOS_PUBLIC; # ej: servicio-usuarios-xxxx.up.railway.app
+  # --------- USUARIOS ----------
+  # NOTA: Como vamos a hostnames públicos, hay que enviar Host del upstream
+  set $usuarios_host ${USUARIOS_PUBLIC};
 
   location = /captcha {
-    resolver 1.1.1.1 8.8.8.8 ipv6=off valid=30s;
-    proxy_ssl_server_name on;
-    proxy_ssl_name $USUARIOS;
-    proxy_set_header Host $USUARIOS;
-    proxy_pass https://$USUARIOS$request_uri;
+    proxy_set_header Host $usuarios_host;
+    proxy_pass https://$usuarios_host/captcha;
   }
 
   location = /token {
-    resolver 1.1.1.1 8.8.8.8 ipv6=off valid=30s;
-    proxy_ssl_server_name on;
-    proxy_ssl_name $USUARIOS;
-    proxy_set_header Host $USUARIOS;
-    proxy_pass https://$USUARIOS$request_uri;
+    proxy_set_header Host $usuarios_host;
+    proxy_pass https://$usuarios_host/token;
   }
 
   location = /register {
-    resolver 1.1.1.1 8.8.8.8 ipv6=off valid=30s;
-    proxy_ssl_server_name on;
-    proxy_ssl_name $USUARIOS;
-    proxy_set_header Host $USUARIOS;
-    proxy_pass https://$USUARIOS$request_uri;
+    proxy_set_header Host $usuarios_host;
+    proxy_pass https://$usuarios_host/register;
   }
 
   location ^~ /usuarios/ {
-    resolver 1.1.1.1 8.8.8.8 ipv6=off valid=30s;
-    proxy_ssl_server_name on;
-    proxy_ssl_name $USUARIOS;
-    proxy_set_header Host $USUARIOS;
-    proxy_pass https://$USUARIOS$request_uri;
+    proxy_set_header Host $usuarios_host;
+    proxy_pass https://$usuarios_host;
   }
 
   location = /usuarios {
-    resolver 1.1.1.1 8.8.8.8 ipv6=off valid=30s;
-    proxy_ssl_server_name on;
-    proxy_ssl_name $USUARIOS;
-    proxy_set_header Host $USUARIOS;
-    proxy_pass https://$USUARIOS$request_uri;
+    proxy_set_header Host $usuarios_host;
+    proxy_pass https://$usuarios_host/usuarios;
   }
 
-  # ========= RESERVAS =========
-  set $RESERVAS $RESERVAS_PUBLIC; # ej: servicio-reservas-xxxx.up.railway.app
+  # --------- RESERVAS ----------
+  set $reservas_host ${RESERVAS_PUBLIC};
 
   location ^~ /reservas/ {
-    resolver 1.1.1.1 8.8.8.8 ipv6=off valid=30s;
-    proxy_ssl_server_name on;
-    proxy_ssl_name $RESERVAS;
-    proxy_set_header Host $RESERVAS;
-    proxy_pass https://$RESERVAS$request_uri;
+    proxy_set_header Host $reservas_host;
+    proxy_pass https://$reservas_host;
   }
 
   location = /reservas {
-    resolver 1.1.1.1 8.8.8.8 ipv6=off valid=30s;
-    proxy_ssl_server_name on;
-    proxy_ssl_name $RESERVAS;
-    proxy_set_header Host $RESERVAS;
-    proxy_pass https://$RESERVAS$request_uri;
+    proxy_set_header Host $reservas_host;
+    proxy_pass https://$reservas_host/reservas;
   }
 
-  # ========= INVENTARIO =========
-  set $INVENTARIO $INVENTARIO_PUBLIC; # ej: servicio-inventario-xxxx.up.railway.app
+  # --------- INVENTARIO ----------
+  set $inventario_host ${INVENTARIO_PUBLIC};
 
   location ^~ /prestamos/ {
-    resolver 1.1.1.1 8.8.8.8 ipv6=off valid=30s;
-    proxy_ssl_server_name on;
-    proxy_ssl_name $INVENTARIO;
-    proxy_set_header Host $INVENTARIO;
-    proxy_pass https://$INVENTARIO$request_uri;
+    proxy_set_header Host $inventario_host;
+    proxy_pass https://$inventario_host;
   }
 
   location = /prestamos {
-    resolver 1.1.1.1 8.8.8.8 ipv6=off valid=30s;
-    proxy_ssl_server_name on;
-    proxy_ssl_name $INVENTARIO;
-    proxy_set_header Host $INVENTARIO;
-    proxy_pass https://$INVENTARIO$request_uri;
+    proxy_set_header Host $inventario_host;
+    proxy_pass https://$inventario_host/prestamos;
   }
 
   location ^~ /admin/prestamos/ {
-    resolver 1.1.1.1 8.8.8.8 ipv6=off valid=30s;
-    proxy_ssl_server_name on;
-    proxy_ssl_name $INVENTARIO;
-    proxy_set_header Host $INVENTARIO;
-    proxy_pass https://$INVENTARIO$request_uri;
+    proxy_set_header Host $inventario_host;
+    proxy_pass https://$inventario_host;
   }
 
   location = /admin/prestamos {
-    resolver 1.1.1.1 8.8.8.8 ipv6=off valid=30s;
-    proxy_ssl_server_name on;
-    proxy_ssl_name $INVENTARIO;
-    proxy_set_header Host $INVENTARIO;
-    proxy_pass https://$INVENTARIO$request_uri;
+    proxy_set_header Host $inventario_host;
+    proxy_pass https://$inventario_host/admin/prestamos;
   }
 
   location ^~ /planteles/ {
-    resolver 1.1.1.1 8.8.8.8 ipv6=off valid=30s;
-    proxy_ssl_server_name on;
-    proxy_ssl_name $INVENTARIO;
-    proxy_set_header Host $INVENTARIO;
-    proxy_pass https://$INVENTARIO$request_uri;
+    proxy_set_header Host $inventario_host;
+    proxy_pass https://$inventario_host;
   }
 
   location = /planteles {
-    resolver 1.1.1.1 8.8.8.8 ipv6=off valid=30s;
-    proxy_ssl_server_name on;
-    proxy_ssl_name $INVENTARIO;
-    proxy_set_header Host $INVENTARIO;
-    proxy_pass https://$INVENTARIO$request_uri;
+    proxy_set_header Host $inventario_host;
+    proxy_pass https://$inventario_host/planteles;
   }
 
   location ^~ /laboratorios/ {
-    resolver 1.1.1.1 8.8.8.8 ipv6=off valid=30s;
-    proxy_ssl_server_name on;
-    proxy_ssl_name $INVENTARIO;
-    proxy_set_header Host $INVENTARIO;
-    proxy_pass https://$INVENTARIO$request_uri;
+    proxy_set_header Host $inventario_host;
+    proxy_pass https://$inventario_host;
   }
 
   location = /laboratorios {
-    resolver 1.1.1.1 8.8.8.8 ipv6=off valid=30s;
-    proxy_ssl_server_name on;
-    proxy_ssl_name $INVENTARIO;
-    proxy_set_header Host $INVENTARIO;
-    proxy_pass https://$INVENTARIO$request_uri;
+    proxy_set_header Host $inventario_host;
+    proxy_pass https://$inventario_host/laboratorios;
   }
 
   location ^~ /recursos/ {
-    resolver 1.1.1.1 8.8.8.8 ipv6=off valid=30s;
-    proxy_ssl_server_name on;
-    proxy_ssl_name $INVENTARIO;
-    proxy_set_header Host $INVENTARIO;
-    proxy_pass https://$INVENTARIO$request_uri;
+    proxy_set_header Host $inventario_host;
+    proxy_pass https://$inventario_host;
   }
 
   location = /recursos {
-    resolver 1.1.1.1 8.8.8.8 ipv6=off valid=30s;
-    proxy_ssl_server_name on;
-    proxy_ssl_name $INVENTARIO;
-    proxy_set_header Host $INVENTARIO;
-    proxy_pass https://$INVENTARIO$request_uri;
+    proxy_set_header Host $inventario_host;
+    proxy_pass https://$inventario_host/recursos;
   }
 }
