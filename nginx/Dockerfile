@@ -1,7 +1,8 @@
-FROM nginx:1.29
+FROM nginx:1.29-alpine
 
-# Borra cualquier conf previa para evitar que otra .conf se cargue además
-RUN rm -f /etc/nginx/conf.d/default.conf || true
+# Elimina cualquier conf previa
+RUN rm -f /etc/nginx/conf.d/default.conf || true \
+ && rm -rf /etc/nginx/templates || true
 
-# Copia SOLO tu template (el que puse arriba)
-COPY gateway/default.conf.template /etc/nginx/templates/default.conf.template
+# Copia un default.conf FINAL (no plantilla)
+COPY gateway/default.conf /etc/nginx/conf.d/default.conf
