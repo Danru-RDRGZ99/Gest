@@ -1,13 +1,25 @@
-resolver 127.0.0.11 ipv6=off valid=30s;
-
 server {
   listen 80 default_server;
   listen [::]:80 default_server;
   server_name _;
 
-  location = /__health { add_header Content-Type text/plain; return 200 "OK\n"; }
+  # Resolver para dominios públicos (Docker DNS)
+  resolver 127.0.0.11 ipv6=off valid=30s;
 
-  proxy_set_header Host              $host;
+  # Health del gateway
+  location = /__health {
+    add_header Content-Type text/plain;
+    return 200 "OK\n";
+  }
+
+  # (Debug) Ver archivo resultante en runtime (útil para verificar envsubst)
+  location = /__conf {
+    default_type text/plain;
+    root /etc/nginx/conf.d;
+    try_files /default.conf =404;
+  }
+
+  # Cabeceras y timeouts
   proxy_set_header X-Real-IP         $remote_addr;
   proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
   proxy_set_header X-Forwarded-Proto $scheme;
@@ -16,32 +28,111 @@ server {
   proxy_connect_timeout 5s;
   proxy_send_timeout    30s;
 
-  # Reglas USUARIOS (público HTTPS)
-  location = /captcha    { proxy_ssl_server_name on; proxy_pass <USUARIOS_PUBLIC>; }
-  location = /token      { proxy_ssl_server_name on; proxy_pass <USUARIOS_PUBLIC>; }
-  location = /register   { proxy_ssl_server_name on; proxy_pass <USUARIOS_PUBLIC>; }
-  location ^~ /usuarios/ { proxy_ssl_server_name on; proxy_pass <USUARIOS_PUBLIC>; }
-  location =  /usuarios  { proxy_ssl_server_name on; proxy_pass <USUARIOS_PUBLIC>; }
+  # -------------------------------------------------------------------
+  # USUARIOS  ->  https://${USUARIOS_PUBLIC}
+  # -------------------------------------------------------------------
+  location = /captcha    {
+    proxy_ssl_server_name on;
+    # SNI correcto hacia el upstream
+    proxy_pass https://${USUARIOS_PUBLIC};
+  }
 
-  # RESERVAS
-  location ^~ /reservas/ { proxy_ssl_server_name on; proxy_pass <RESERVAS_PUBLIC>; }
-  location =  /reservas  { proxy_ssl_server_name on; proxy_pass <RESERVAS_PUBLIC>; }
+  location = /token      {
+    proxy_ssl_server_name on;
+    proxy_pass https://${USUARIOS_PUBLIC};
+  }
 
-  # INVENTARIO
-  location ^~ /prestamos/       { proxy_ssl_server_name on; proxy_pass <INVENTARIO_PUBLIC>; }
-  location =  /prestamos        { proxy_ssl_server_name on; proxy_pass <INVENTARIO_PUBLIC>; }
-  location ^~ /admin/prestamos/ { proxy_ssl_server_name on; proxy_pass <INVENTARIO_PUBLIC>; }
-  location =  /admin/prestamos  { proxy_ssl_server_name on; proxy_pass <INVENTARIO_PUBLIC>; }
-  location ^~ /planteles/       { proxy_ssl_server_name on; proxy_pass <INVENTARIO_PUBLIC>; }
-  location =  /planteles        { proxy_ssl_server_name on; proxy_pass <INVENTARIO_PUBLIC>; }
-  location ^~ /laboratorios/    { proxy_ssl_server_name on; proxy_pass <INVENTARIO_PUBLIC>; }
-  location =  /laboratorios     { proxy_ssl_server_name on; proxy_pass <INVENTARIO_PUBLIC>; }
-  location ^~ /recursos/        { proxy_ssl_server_name on; proxy_pass <INVENTARIO_PUBLIC>; }
-  location =  /recursos         { proxy_ssl_server_name on; proxy_pass <INVENTARIO_PUBLIC>; }
+  location = /register   {
+    proxy_ssl_server_name on;
+    proxy_pass https://${USUARIOS_PUBLIC};
+  }
 
+  location ^~ /usuarios/ {
+    proxy_ssl_server_name on;
+    proxy_pass https://${USUARIOS_PUBLIC};
+  }
+
+  location = /usuarios   {
+    proxy_ssl_server_name on;
+    proxy_pass https://${USUARIOS_PUBLIC};
+  }
+
+  # -------------------------------------------------------------------
+  # RESERVAS  ->  https://${RESERVAS_PUBLIC}
+  # -------------------------------------------------------------------
+  location ^~ /reservas/ {
+    proxy_ssl_server_name on;
+    proxy_pass https://${RESERVAS_PUBLIC};
+  }
+
+  location = /reservas   {
+    proxy_ssl_server_name on;
+    proxy_pass https://${RESERVAS_PUBLIC};
+  }
+
+  # -------------------------------------------------------------------
+  # INVENTARIO / PRÉSTAMOS  ->  https://${INVENTARIO_PUBLIC}
+  # -------------------------------------------------------------------
+  location ^~ /prestamos/ {
+    proxy_ssl_server_name on;
+    proxy_pass https://${INVENTARIO_PUBLIC};
+  }
+
+  location = /prestamos {
+    proxy_ssl_server_name on;
+    proxy_pass https://${INVENTARIO_PUBLIC};
+  }
+
+  location ^~ /admin/prestamos/ {
+    proxy_ssl_server_name on;
+    proxy_pass https://${INVENTARIO_PUBLIC};
+  }
+
+  location = /admin/prestamos {
+    proxy_ssl_server_name on;
+    proxy_pass https://${INVENTARIO_PUBLIC};
+  }
+
+  location ^~ /planteles/ {
+    proxy_ssl_server_name on;
+    proxy_pass https://${INVENTARIO_PUBLIC};
+  }
+
+  location = /planteles {
+    proxy_ssl_server_name on;
+    proxy_pass https://${INVENTARIO_PUBLIC};
+  }
+
+  location ^~ /laboratorios/ {
+    proxy_ssl_server_name on;
+    proxy_pass https://${INVENTARIO_PUBLIC};
+  }
+
+  location = /laboratorios {
+    proxy_ssl_server_name on;
+    proxy_pass https://${INVENTARIO_PUBLIC};
+  }
+
+  location ^~ /recursos/ {
+    proxy_ssl_server_name on;
+    proxy_pass https://${INVENTARIO_PUBLIC};
+  }
+
+  location = /recursos {
+    proxy_ssl_server_name on;
+    proxy_pass https://${INVENTARIO_PUBLIC};
+  }
+
+  # Errores claros
   error_page 502 504 = @bad_gateway;
   location @bad_gateway {
     add_header Content-Type text/plain;
     return 502 "Bad Gateway (gateway): upstream público no responde en HTTPS.\n";
+  }
+
+  # Catch-all
+  location / {
+    add_header Content-Type text/plain;
+    return 404 "Ruta no encontrada en gateway\n";
   }
 }
