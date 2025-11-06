@@ -227,3 +227,7 @@ def change_my_password(pass_data: schemas.PasswordUpdate, user: CurrentUser, db:
     except Exception:
         db.rollback()
         raise HTTPException(status_code=500, detail="Error interno.")
+
+@app.get("/__health")
+def health():
+    return {"ok": True}
