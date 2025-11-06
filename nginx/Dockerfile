@@ -1,7 +1,7 @@
-FROM nginx:1.25-alpine
+FROM nginx:1.29
 
-# Copiamos la plantilla que envsubst va a renderizar en arranque
-COPY default.conf.template /etc/nginx/templates/default.conf.template
+# Borra cualquier conf previa para evitar que otra .conf se cargue además
+RUN rm -f /etc/nginx/conf.d/default.conf || true
 
-# (Opcional) logs a stdout/stderr ya vienen configurados
-# CMD por defecto de la imagen ya hace el envsubst y arranca nginx
+# Copia SOLO tu template (el que puse arriba)
+COPY gateway/default.conf.template /etc/nginx/templates/default.conf.template
