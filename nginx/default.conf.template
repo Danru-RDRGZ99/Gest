@@ -1,6 +1,5 @@
 # ===== default.conf.template (Gateway) =====
 
-# Upstreams por servicio
 upstream usuarios_upstream {
     server ${USUARIOS_HOST}:${USUARIOS_PORT};
     keepalive 64;
@@ -17,24 +16,31 @@ upstream inventario_upstream {
 }
 
 server {
-    # Usa el puerto que inyecta Railway
     listen ${PORT};
     server_name _;
 
-    # Resolver interno de Docker (por si hay resoluciones dinámicas)
     resolver 127.0.0.11 ipv6=off valid=10s;
-
-    # Ajustes generales
     server_tokens off;
     client_max_body_size 20m;
 
-    # Timeouts razonables
+    # timeouts globales sensatos
     proxy_connect_timeout 5s;
     proxy_send_timeout    60s;
     proxy_read_timeout    60s;
     send_timeout          60s;
 
-    # -------- WebSocket (va a Reservas) --------
+    # -------- Endpoints de depuración/sonda --------
+    location = /__health {
+        add_header Content-Type text/plain;
+        return 200 "gateway ok\n";
+    }
+
+    # Sondas hacia cada servicio (útiles para probar routing/ DNS interno)
+    location = /__probe/usuarios  { proxy_pass http://usuarios_upstream/__health;  proxy_set_header Host $host; add_header X-Upstream $upstream_addr always; }
+    location = /__probe/reservas  { proxy_pass http://reservas_upstream/__health;  proxy_set_header Host $host; add_header X-Upstream $upstream_addr always; }
+    location = /__probe/inventario{ proxy_pass http://inventario_upstream/__health;proxy_set_header Host $host; add_header X-Upstream $upstream_addr always; }
+
+    # -------- WebSocket (si lo usas) --------
     location /ws {
         proxy_pass http://reservas_upstream;
         proxy_http_version 1.1;
@@ -42,10 +48,23 @@ server {
         proxy_set_header Connection "Upgrade";
         proxy_set_header Host $host;
         proxy_read_timeout 60s;
+        add_header X-Upstream $upstream_addr always;
+    }
+
+    # -------- CAPTCHA: exact match con buffer off y header de upstream --------
+    location = /captcha {
+        proxy_pass http://usuarios_upstream/captcha;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+        proxy_read_timeout 30s;
+        add_header X-Upstream $upstream_addr always;
     }
 
     # -------- Auth & Usuarios --------
-    # Incluye captcha, token, register, /usuarios/*, /auth/* (p.ej. /auth/google-token)
     location ~ ^/(captcha|token|register|usuarios|auth)(/|$) {
         proxy_pass http://usuarios_upstream;
         proxy_http_version 1.1;
@@ -53,12 +72,10 @@ server {
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_buffers 16 32k;
-        proxy_busy_buffers_size 64k;
+        add_header X-Upstream $upstream_addr always;
     }
 
     # -------- Reservas y Horarios --------
-    # Ajusta los prefijos si tus endpoints usan otros nombres
     location ~ ^/(reservas|laboratorios/.*/horario|admin/horarios|reglas_horario|excepciones_horario)(/|$) {
         proxy_pass http://reservas_upstream;
         proxy_http_version 1.1;
@@ -66,9 +83,10 @@ server {
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        add_header X-Upstream $upstream_addr always;
     }
 
-    # -------- Inventario (Préstamos, Recursos, Planteles, Laboratorios) --------
+    # -------- Inventario --------
     location ~ ^/(prestamos|admin/prestamos|recursos|planteles|laboratorios)(/|$) {
         proxy_pass http://inventario_upstream;
         proxy_http_version 1.1;
@@ -76,9 +94,10 @@ server {
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        add_header X-Upstream $upstream_addr always;
     }
 
-    # -------- Catch-all al Inventario --------
+    # -------- Catch-all --------
     location / {
         proxy_pass http://inventario_upstream;
         proxy_http_version 1.1;
@@ -86,11 +105,6 @@ server {
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # -------- Healthcheck del Gateway --------
-    location = /__health {
-        add_header Content-Type text/plain;
-        return 200 "gateway ok\n";
+        add_header X-Upstream $upstream_addr always;
     }
 }
