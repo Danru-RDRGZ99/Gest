@@ -5,12 +5,21 @@ server {
 
   # ---------- Health ----------
   location = /__health {
-    return 200 "OK\n";
     add_header Content-Type text/plain;
+    return 200 "OK\n";
   }
 
-  # ---------- Config común de proxy ----------
-  set $proxy_common "";
+  # ---------- Dump (debug de upstreams) ----------
+  # Útil para verificar qué valores están llegando por env
+  location = /__upstreams {
+    add_header Content-Type text/plain;
+    return 200 "USUARIOS=http://$USUARIOS_HOSTPORT
+RESERVAS=http://$RESERVAS_HOSTPORT
+INVENTARIO=http://$INVENTARIO_HOSTPORT
+";
+  }
+
+  # ---------- Cabeceras proxy comunes ----------
   proxy_set_header Host              $host;
   proxy_set_header X-Real-IP         $remote_addr;
   proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
@@ -21,38 +30,32 @@ server {
   proxy_send_timeout 30s;
 
   # ---------- Servicio USUARIOS ----------
-  # /captcha y /token NO llevan prefijo en tu front.
-  location = /captcha    { proxy_pass $USUARIOS_ORIGIN; }
-  location = /token      { proxy_pass $USUARIOS_ORIGIN; }
-  location = /register   { proxy_pass $USUARIOS_ORIGIN; }
-
-  # Todo lo que empiece con /usuarios → usuarios
-  location ^~ /usuarios/ { proxy_pass $USUARIOS_ORIGIN; }
-  location =  /usuarios  { proxy_pass $USUARIOS_ORIGIN; }
+  # ¡OJO! Prefijo vacío: tus rutas están en raíz (/captcha, /token, /register, /usuarios)
+  location = /captcha    { proxy_pass http://$USUARIOS_HOSTPORT; }
+  location = /token      { proxy_pass http://$USUARIOS_HOSTPORT; }
+  location = /register   { proxy_pass http://$USUARIOS_HOSTPORT; }
+  location ^~ /usuarios/ { proxy_pass http://$USUARIOS_HOSTPORT; }
+  location =  /usuarios  { proxy_pass http://$USUARIOS_HOSTPORT; }
 
   # ---------- Servicio RESERVAS ----------
-  location ^~ /reservas/ { proxy_pass $RESERVAS_ORIGIN; }
-  location =  /reservas  { proxy_pass $RESERVAS_ORIGIN; }
+  location ^~ /reservas/ { proxy_pass http://$RESERVAS_HOSTPORT; }
+  location =  /reservas  { proxy_pass http://$RESERVAS_HOSTPORT; }
 
   # ---------- Servicio INVENTARIO / PRÉSTAMOS ----------
-  location ^~ /prestamos/    { proxy_pass $INVENTARIO_ORIGIN; }
-  location =  /prestamos     { proxy_pass $INVENTARIO_ORIGIN; }
-
-  location ^~ /admin/prestamos/ { proxy_pass $INVENTARIO_ORIGIN; }
-  location =  /admin/prestamos  { proxy_pass $INVENTARIO_ORIGIN; }
-
-  location ^~ /planteles/ { proxy_pass $INVENTARIO_ORIGIN; }
-  location =  /planteles  { proxy_pass $INVENTARIO_ORIGIN; }
-
-  location ^~ /laboratorios/ { proxy_pass $INVENTARIO_ORIGIN; }
-  location =  /laboratorios  { proxy_pass $INVENTARIO_ORIGIN; }
-
-  location ^~ /recursos/ { proxy_pass $INVENTARIO_ORIGIN; }
-  location =  /recursos  { proxy_pass $INVENTARIO_ORIGIN; }
+  location ^~ /prestamos/       { proxy_pass http://$INVENTARIO_HOSTPORT; }
+  location =  /prestamos        { proxy_pass http://$INVENTARIO_HOSTPORT; }
+  location ^~ /admin/prestamos/ { proxy_pass http://$INVENTARIO_HOSTPORT; }
+  location =  /admin/prestamos  { proxy_pass http://$INVENTARIO_HOSTPORT; }
+  location ^~ /planteles/       { proxy_pass http://$INVENTARIO_HOSTPORT; }
+  location =  /planteles        { proxy_pass http://$INVENTARIO_HOSTPORT; }
+  location ^~ /laboratorios/    { proxy_pass http://$INVENTARIO_HOSTPORT; }
+  location =  /laboratorios     { proxy_pass http://$INVENTARIO_HOSTPORT; }
+  location ^~ /recursos/        { proxy_pass http://$INVENTARIO_HOSTPORT; }
+  location =  /recursos         { proxy_pass http://$INVENTARIO_HOSTPORT; }
 
   # ---------- Fallback ----------
   location / {
-    return 404 "Ruta no encontrada en gateway\n";
     add_header Content-Type text/plain;
+    return 404 "Ruta no encontrada en gateway\n";
   }
 }
