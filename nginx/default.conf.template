@@ -1,61 +1,28 @@
+upstream usuarios_up { server servicio-usuarios.railway.internal:8001; keepalive 16; }
+upstream reservas_up { server servicio-reservas.railway.internal:8002; keepalive 16; }
+upstream inventario_up { server servicio-inventario.railway.internal:8003; keepalive 16; }
+
 server {
   listen 80 default_server;
   listen [::]:80 default_server;
-  server_name _;
 
-  # ---------- Health ----------
-  location = /__health {
-    add_header Content-Type text/plain;
-    return 200 "OK\n";
-  }
+  location = /captcha    { proxy_pass http://usuarios_up; }
+  location = /token      { proxy_pass http://usuarios_up; }
+  location = /register   { proxy_pass http://usuarios_up; }
+  location ^~ /usuarios/ { proxy_pass http://usuarios_up; }
+  location =  /usuarios  { proxy_pass http://usuarios_up; }
 
-  # ---------- Dump (debug de upstreams) ----------
-  # Útil para verificar qué valores están llegando por env
-  location = /__upstreams {
-    add_header Content-Type text/plain;
-    return 200 "USUARIOS=http://$USUARIOS_HOSTPORT
-RESERVAS=http://$RESERVAS_HOSTPORT
-INVENTARIO=http://$INVENTARIO_HOSTPORT
-";
-  }
+  location ^~ /reservas/ { proxy_pass http://reservas_up; }
+  location =  /reservas  { proxy_pass http://reservas_up; }
 
-  # ---------- Cabeceras proxy comunes ----------
-  proxy_set_header Host              $host;
-  proxy_set_header X-Real-IP         $remote_addr;
-  proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-  proxy_set_header X-Forwarded-Proto $scheme;
-  proxy_http_version 1.1;
-  proxy_read_timeout 30s;
-  proxy_connect_timeout 5s;
-  proxy_send_timeout 30s;
-
-  # ---------- Servicio USUARIOS ----------
-  # ¡OJO! Prefijo vacío: tus rutas están en raíz (/captcha, /token, /register, /usuarios)
-  location = /captcha    { proxy_pass http://$USUARIOS_HOSTPORT; }
-  location = /token      { proxy_pass http://$USUARIOS_HOSTPORT; }
-  location = /register   { proxy_pass http://$USUARIOS_HOSTPORT; }
-  location ^~ /usuarios/ { proxy_pass http://$USUARIOS_HOSTPORT; }
-  location =  /usuarios  { proxy_pass http://$USUARIOS_HOSTPORT; }
-
-  # ---------- Servicio RESERVAS ----------
-  location ^~ /reservas/ { proxy_pass http://$RESERVAS_HOSTPORT; }
-  location =  /reservas  { proxy_pass http://$RESERVAS_HOSTPORT; }
-
-  # ---------- Servicio INVENTARIO / PRÉSTAMOS ----------
-  location ^~ /prestamos/       { proxy_pass http://$INVENTARIO_HOSTPORT; }
-  location =  /prestamos        { proxy_pass http://$INVENTARIO_HOSTPORT; }
-  location ^~ /admin/prestamos/ { proxy_pass http://$INVENTARIO_HOSTPORT; }
-  location =  /admin/prestamos  { proxy_pass http://$INVENTARIO_HOSTPORT; }
-  location ^~ /planteles/       { proxy_pass http://$INVENTARIO_HOSTPORT; }
-  location =  /planteles        { proxy_pass http://$INVENTARIO_HOSTPORT; }
-  location ^~ /laboratorios/    { proxy_pass http://$INVENTARIO_HOSTPORT; }
-  location =  /laboratorios     { proxy_pass http://$INVENTARIO_HOSTPORT; }
-  location ^~ /recursos/        { proxy_pass http://$INVENTARIO_HOSTPORT; }
-  location =  /recursos         { proxy_pass http://$INVENTARIO_HOSTPORT; }
-
-  # ---------- Fallback ----------
-  location / {
-    add_header Content-Type text/plain;
-    return 404 "Ruta no encontrada en gateway\n";
-  }
+  location ^~ /prestamos/       { proxy_pass http://inventario_up; }
+  location =  /prestamos        { proxy_pass http://inventario_up; }
+  location ^~ /admin/prestamos/ { proxy_pass http://inventario_up; }
+  location =  /admin/prestamos  { proxy_pass http://inventario_up; }
+  location ^~ /planteles/       { proxy_pass http://inventario_up; }
+  location =  /planteles        { proxy_pass http://inventario_up; }
+  location ^~ /laboratorios/    { proxy_pass http://inventario_up; }
+  location =  /laboratorios     { proxy_pass http://inventario_up; }
+  location ^~ /recursos/        { proxy_pass http://inventario_up; }
+  location =  /recursos         { proxy_pass http://inventario_up; }
 }
