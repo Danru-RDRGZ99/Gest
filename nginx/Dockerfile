@@ -1,8 +1,12 @@
-FROM nginx:1.29-alpine
+FROM python:3.11-slim
+WORKDIR /app
 
-# Elimina cualquier conf previa
-RUN rm -f /etc/nginx/conf.d/default.conf || true \
- && rm -rf /etc/nginx/templates || true
+COPY servicio_usuarios/requirements_usuarios.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Copia un default.conf FINAL (no plantilla)
-COPY gateway/default.conf /etc/nginx/conf.d/default.conf
+COPY servicio_usuarios/ /app/
+ENV PYTHONUNBUFFERED=1
+
+# Falla si $PORT no está (así no despliega mal)
+CMD test -n "$PORT" || (echo "ERROR: PORT no está definido" && exit 1); \
+    uvicorn main_usuarios:app --host 0.0.0.0 --port "$PORT"
